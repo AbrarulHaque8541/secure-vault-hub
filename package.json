@@ -1,16 +1,28 @@
 {
-  "name": "vite-template",
+  "name": "secure-vault-hub",
+  "description": "Local-first encrypted vault for notes, links, snippets and prompts — AES-256-GCM sealed on-device, with an on-demand GGUF model station, plugin sandbox and OTA update channels.",
+  "version": "1.0.0",
+  "license": "MIT",
   "private": true,
-  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "bun test src/lib",
+    "typecheck": "tsc -b --noEmit",
+    "convex:dev": "convex dev --once",
+    "cap:sync": "vite build && cap sync android",
+    "cap:open": "cap open android",
+    "apk:debug": "vite build && cap sync android && cd android && ./gradlew assembleDebug",
+    "apk:release": "vite build && cap sync android && cd android && ./gradlew assembleRelease"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
     "@convex-dev/auth": "^0.0.90",
     "@hookform/resolvers": "^5.2.2",
     "@jridgewell/trace-mapping": "^0.3.31",

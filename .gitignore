@@ -1,4 +1,45 @@
-.env.local
+# Dependencies
 node_modules
+
+# Build output
 dist
 src/convex/_generated
+
+# Environment / secrets — never commit
+.env
+.env.local
+.env.*.local
+
+# Capacitor / Android build outputs
+android/.gradle
+android/app/build
+android/build
+android/local.properties
+android/app/src/main/assets/public
+android/capacitor-cordova-android-plugins
+
+# Signing keys — never commit
+*.keystore
+*.jks
+keystore.properties
+
+# Native IDE files
+android/.idea
+android/*.iml
+android/local.properties
+android/captures
+android/.cxx
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+bun.lock.bak
+
+# Test/build artifacts
+coverage
+tsconfig.app.tsbuildinfo
+tsconfig.node.tsbuildinfo

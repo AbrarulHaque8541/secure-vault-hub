@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Stub Convex generated types
+        run: |
+          mkdir -p src/convex/_generated
+          cat > src/convex/_generated/api.d.ts <<'EOF'
+          // CI stub — replaced locally by `convex dev`
+          export declare const api: Record<string, unknown>;
+          export declare const anyApi: { [k: string]: any };
+          EOF
+          cat > src/convex/_generated/api.js <<'EOF'
+          export const anyApi = new Proxy({}, { get: () => new Proxy(() => {}, { get: () => ({}), apply: () => ({}) }) });
+          export const api = anyApi;
+          EOF
+          cat > src/convex/_generated/dataModel.d.ts <<'EOF'
+          // CI stub — replaced locally by `convex dev`
+          export type DataModel = Record<string, never>;
+          EOF
+
+      - name: Build web assets and sync to Android
+        run: bunx cap sync android
+        env:
+          # Set this repo secret so released APKs talk to your real Convex
+          # deployment. Without it, the APK installs but has no backend.
+          VITE_CONVEX_URL: ${{ secrets.VITE_CONVEX_URL || 'https://ci-placeholder.convex.cloud' }}
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x android/gradlew
+
+      - name: Build debug APK
+        run: cd android && ./gradlew assembleDebug --no-daemon
+
+      - name: Build release APK (unsigned)
+        run: cd android && ./gradlew assembleRelease --no-daemon
+
+      - name: Rename artifacts
+        run: |
+          mkdir -p apk-out
+          cp android/app/build/outputs/apk/debug/app-debug.apk \
+             apk-out/SecureVaultHub-${{ github.ref_name }}-debug.apk
+          cp android/app/build/outputs/apk/release/app-release-unsigned.apk \
+             apk-out/SecureVaultHub-${{ github.ref_name }}-release-unsigned.apk
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-${{ github.ref_name }}
+          path: apk-out/*.apk
+          retention-days: 30
+
+      - name: Create GitHub Release with APKs
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apk-out/*.apk
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}

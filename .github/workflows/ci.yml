@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck, lint & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Unit tests
+        run: bun test src/lib
+
+  build-web:
+    name: Production web build
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # Convex codegen isn't needed for a build sanity check: the committed
+      # _generated types are excluded from VCS and CI only proves `vite build`
+      # succeeds against a fresh `convex dev` run locally. CI verifies the
+      # toolchain, not deployment.
+      - name: Stub Convex generated types
+        run: |
+          mkdir -p src/convex/_generated
+          cat > src/convex/_generated/api.d.ts <<'EOF'
+          // CI stub — replaced locally by `convex dev`
+          export declare const api: Record<string, unknown>;
+          export declare const anyApi: { [k: string]: any };
+          EOF
+          cat > src/convex/_generated/api.js <<'EOF'
+          export const anyApi = new Proxy({}, { get: () => new Proxy(() => {}, { get: () => ({}), apply: () => ({}) }) });
+          export const api = anyApi;
+          EOF
+          cat > src/convex/_generated/dataModel.d.ts <<'EOF'
+          // CI stub — replaced locally by `convex dev`
+          export type DataModel = Record<string, never>;
+          EOF
+
+      - name: Build
+        run: bun run build
+        env:
+          # Set this repo secret for a build that talks to your real backend;
+          # CI falls back to a placeholder — enough to prove the build works.
+          VITE_CONVEX_URL: ${{ secrets.VITE_CONVEX_URL || 'https://ci-placeholder.convex.cloud' }}
+
+      - name: Upload web dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+          retention-days: 7

@@ -1,272 +1,253 @@
-## Overview
+<div align="center">
 
-This project uses the following tech stack:
-- Vite
-- Typescript
-- React Router v7 (all imports from `react-router` instead of `react-router-dom`)
-- React 19 (for frontend components)
-- Tailwind v4 (for styling)
-- Shadcn UI (for UI components library)
-- Lucide Icons (for icons)
-- Convex (for backend & database)
-- Convex Auth (for authentication)
-- Framer Motion (for animations)
-- Three js (for 3d models)
+# 🔐 Secure Vault Hub
 
-All relevant files live in the 'src' directory.
+**Your second brain. Nobody else's.**
 
-Use bun for the package manager.
+A local-first encrypted vault for notes, links, snippets, prompts and tasks —
+sealed with AES-256-GCM on your device, with an on-demand local GGUF model
+station, a plugin sandbox, and OTA update channels.
 
-## Setup
+`React 19` · `Vite` · `Convex` · `Tailwind v4` · `Capacitor` · `WebCrypto`
 
-This project is set up already and running on a cloud environment, as well as a convex development in the sandbox.
+[![CI](https://img.shields.io/badge/CI-GitHub_Actions-2088FF?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
+[![Release](https://img.shields.io/badge/Release-APK_artifacts-FF641A)](.github/workflows/release.yml)
+[![Tests](https://img.shields.io/badge/tests-bun_✓_29_passing-brightgreen)](#testing)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## Environment Variables
+</div>
 
-The project is set up with project specific CONVEX_DEPLOYMENT and VITE_CONVEX_URL environment variables on the client side.
+---
 
-The convex server has a separate set of environment variables that are accessible by the convex backend.
+## Table of contents
 
-Currently, these variables include auth-specific keys: JWKS, JWT_PRIVATE_KEY, and SITE_URL.
+- [What is this?](#what-is-this)
+- [Feature map](#feature-map)
+- [Security model](#security-model)
+- [Architecture](#architecture)
+- [Quick start (web)](#quick-start-web)
+- [Building the Android APK](#building-the-android-apk)
+- [Testing](#testing)
+- [Project structure](#project-structure)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [Security disclosures](#security-disclosures)
+- [License](#license)
 
+---
 
-# Using Authentication (Important!)
+## What is this?
 
-You must follow these conventions when using authentication.
+Secure Vault Hub is a **single-user, zero-knowledge personal vault**. You
+capture anything — a thought, a URL, a code snippet, a prompt, a task — and it
+is encrypted **on your device** before it ever touches the network. The sync
+backend stores only opaque ciphertext; not even the database operator can read
+your entries.
 
-## Auth is already set up.
+Beyond the vault, it ships a developer layer: a local GGUF model station that
+profiles models against your hardware, a permissioned plugin sandbox with a
+live log, and OTA update channels (alpha / beta / stable) — all inside one
+dark, minimal, deliberately playful interface.
 
-All convex authentication functions are already set up. The auth currently uses email OTP and anonymous users, but can support more.
+> **Hidden dev menu:** tap the build figure in the dashboard stat ring
+> **7 times**. A countdown appears from the 3rd tap.
 
-The email OTP configuration is defined in `src/convex/auth/emailOtp.ts`. DO NOT MODIFY THIS FILE.
+## Feature map
 
-Also, DO NOT MODIFY THESE AUTH FILES: `src/convex/auth.config.ts` and `src/convex/auth.ts`.
+| Phase | Feature | Where |
+|---|---|---|
+| Capture | Universal capture bar with `#note` `#link` `#snippet` `#prompt` `#task` tags; bare URLs auto-file as links | `src/lib/capture.ts`, `src/pages/Dashboard.tsx` |
+| Vault | Per-entry AES-256-GCM sealing, pin, edit (re-encrypt on save), filter, search, delete-with-confirm | `src/lib/crypto.ts`, `src/components/VaultCard.tsx` |
+| Storage | Owner-scoped CRUD on Convex with per-user indexes; ciphertext-only storage | `src/convex/vault.ts`, `src/convex/schema.ts` |
+| Model station | GGUF catalog (Qwen2.5, Llama 3.2, Gemma 2, Phi-3.5) with params/quant/context/license profiles and simulated download lanes | `src/pages/Dashboard.tsx` |
+| Power modes | 7-tap hidden dev unlock, master power toggle, plugin sandbox with permission grants/revokes and live terminal log | `src/pages/Dashboard.tsx`, `src/components/AppHeader.tsx` |
+| CLI bridge | Termux-style shell-lane plugin (roadmap scaffold) | `src/pages/Dashboard.tsx` |
+| OTA engine | Alpha/beta/stable channels, manifest check, staged install with progress | `src/pages/Dashboard.tsx` |
+| Theming | Dark-first design system with ember/iris/mint/rose glow cards, dot-matrix numerals, light mode | `src/index.css`, `src/components/theme-provider.tsx` |
 
-## Using Convex Auth on the backend
-
-On the `src/convex/users.ts` file, you can use the `getCurrentUser` function to get the current user's data.
-
-## Using Convex Auth on the frontend
-
-The `/auth` page is already set up to use auth. Navigate to `/auth` for all log in / sign up sequences.
-
-You MUST use this hook to get user data. Never do this yourself without the hook:
-```typescript
-import { useAuth } from "@/hooks/use-auth";
-
-const { isLoading, isAuthenticated, user, signIn, signOut } = useAuth();
-```
-
-## Protected Routes
-
-The starter `/dashboard` route is protected with `RequireAuth`, which sends
-signed-out users to `/auth?returnTo=<current route>`. Extend that page for the
-product's authenticated experience, and reuse `RequireAuth` when adding another
-protected route.
-
-## Auth Page
-
-The auth page is defined in `src/pages/Auth.tsx`. Send sign-in and sign-up actions
-to `/auth`.
-
-## Authorization
-
-You can perform authorization checks on the frontend and backend.
-
-On the frontend, you can use the `useAuth` hook to get the current user's data and authentication state.
-
-You should also be protecting queries, mutations, and actions at the base level, checking for authorization securely.
-
-## Adding a redirect after auth
-
-The `/auth` route in `src/main.tsx` redirects to `/dashboard` by default. If the
-product's main authenticated route is different, update `redirectAfterAuth` to
-that route. A validated same-origin `returnTo` query parameter takes priority so
-users can resume the protected page they originally requested. Never leave an
-authenticated product redirecting back to the public landing page.
-
-## Complete authenticated products
-
-When the requested product implies accounts, a workspace, a dashboard, or other
-signed-in functionality, the task is not complete with only a landing page and
-auth form. Build the main authenticated experience, protect its route, and verify
-that signing in reaches it.
-
-# Frontend Conventions
-
-You will be using the Vite frontend with React 19, Tailwind v4, and Shadcn UI.
-
-Generally, pages should be in the `src/pages` folder, and components should be in the `src/components` folder.
-
-Shadcn primitives are located in the `src/components/ui` folder and should be used by default.
-
-## Page routing
-
-Your page component should go under the `src/pages` folder.
-
-When adding a page, update the react router configuration in `src/main.tsx` to include the new route you just added.
-
-## Shad CN conventions
-
-Follow these conventions when using Shad CN components, which you should use by default.
-- Remember to use "cursor-pointer" to make the element clickable
-- For title text, use the "tracking-tight font-bold" class to make the text more readable
-- Always make apps MOBILE RESPONSIVE. This is important
-- AVOID NESTED CARDS. Try and not to nest cards, borders, components, etc. Nested cards add clutter and make the app look messy.
-- AVOID SHADOWS. Avoid adding any shadows to components. stick with a thin border without the shadow.
-- Avoid skeletons; instead, use the loader2 component to show a spinning loading state when loading data.
-
-
-## Landing Pages
-
-You must always create good-looking designer-level styles to your application. 
-- Make it well animated and fit a certain "theme", ie neo brutalist, retro, neumorphism, glass morphism, etc
-
-Use known images and emojis from online.
-
-If the user is logged in already, show the get started button to say "Dashboard" or "Profile" instead to take them there.
-
-## Responsiveness and formatting
-
-Make sure pages are wrapped in a container to prevent the width stretching out on wide screens. Always make sure they are centered aligned and not off-center.
-
-Always make sure that your designs are mobile responsive. Verify the formatting to ensure it has correct max and min widths as well as mobile responsiveness.
-
-- Always create sidebars for protected dashboard pages and navigate between pages
-- Always create navbars for landing pages
-- On these bars, the created logo should be clickable and redirect to the index page
-
-## Animating with Framer Motion
-
-You must add animations to components using Framer Motion. It is already installed and configured in the project.
-
-To use it, import the `motion` component from `framer-motion` and use it to wrap the component you want to animate.
-
-
-### Other Items to animate
-- Fade in and Fade Out
-- Slide in and Slide Out animations
-- Rendering animations
-- Button clicks and UI elements
-
-Animate for all components, including on landing page and app pages.
-
-## Three JS Graphics
-
-Your app comes with three js by default. You can use it to create 3D graphics for landing pages, games, etc.
-
-
-## Colors
-
-You can override colors in: `src/index.css`
-
-This uses the oklch color format for tailwind v4.
-
-Always use these color variable names.
-
-Make sure all ui components are set up to be mobile responsive and compatible with both light and dark mode.
-
-Set theme using `dark` or `light` variables at the parent className.
-
-## Styling and Theming
-
-When changing the theme, always change the underlying theme of the shad cn components app-wide under `src/components/ui` and the colors in the index.css file.
-
-Avoid hardcoding in colors unless necessary for a use case, and properly implement themes through the underlying shad cn ui components.
-
-When styling, ensure buttons and clickable items have pointer-click on them (don't by default).
-
-Always follow a set theme style and ensure it is tuned to the user's liking.
-
-## Toasts
-
-You should always use toasts to display results to the user, such as confirmations, results, errors, etc.
-
-Use the shad cn Sonner component as the toaster. For example:
+## Security model
 
 ```
-import { toast } from "sonner"
-
-import { Button } from "@/components/ui/button"
-export function SonnerDemo() {
-  return (
-    <Button
-      variant="outline"
-      onClick={() =>
-        toast("Event has been created", {
-          description: "Sunday, December 03, 2023 at 9:00 AM",
-          action: {
-            label: "Undo",
-            onClick: () => console.log("Undo"),
-          },
-        })
-      }
-    >
-      Show Toast
-    </Button>
-  )
-}
+┌──────────────────────────── YOUR DEVICE ────────────────────────────┐
+│                                                                     │
+│  passphrase ──▶ PBKDF2-SHA256 (210,000 iter, 16-byte random salt)   │
+│                     │                                               │
+│                     ▼                                               │
+│              AES-256-GCM key ──▶ encrypt(plaintext, random 12B IV)  │
+│                     │                                               │
+│                     ▼                                               │
+│         { v:1, kdf, iterations, salt, iv, ct }  ── base64 JSON      │
+│                                                                     │
+└────────────────────────────────│────────────────────────────────────┘
+                                 │  HTTPS (ciphertext only)
+                                 ▼
+┌──────────────────────────── CONVEX BACKEND ────────────────────────┐
+│  vaultItems: userId, title, kind, ciphertext, pinned, timestamps    │
+│  • every query/mutation scoped to getAuthUserId(ctx)                │
+│  • server CANNOT decrypt: no key ever leaves the device             │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-Remember to import { toast } from "sonner". Usage: `toast("Event has been created.")`
+- **Key never leaves the device.** The passphrase lives in memory for the tab
+  session only (`src/lib/vault-store.ts`); a refresh locks the vault.
+- **No reset link, by design.** Lose the key and the ciphertext is unrecoverable.
+- **Integrity.** AES-GCM authentication rejects tampered ciphertext and wrong
+  keys with `OperationError` (covered by tests).
+- **Per-entry salts and IVs.** Identical plaintexts produce distinct ciphertexts.
 
-## Dialogs
+## Architecture
 
-Always ensure your larger dialogs have a scroll in its content to ensure that its content fits the screen size. Make sure that the content is not cut off from the screen.
+| Layer | Tech | Notes |
+|---|---|---|
+| UI | React 19, Tailwind CSS v4, shadcn/ui, Framer Motion | Lazy-loaded routes |
+| State | Convex reactive queries + tiny `useSyncExternalStore` stores | No Redux/Zustand |
+| Backend | Convex functions (`src/convex/`) | Auth via `@convex-dev/auth` (email OTP + anonymous) |
+| Crypto | WebCrypto (AES-256-GCM, PBKDF2-SHA256) | `src/lib/crypto.ts` |
+| Mobile shell | Capacitor 8 (Android) | `capacitor.config.ts`, `android/` |
+| Tests | Bun test runner | `src/lib/*.test.ts` |
+| CI/CD | GitHub Actions | lint + typecheck + tests + APK release artifacts |
 
-Ideally, instead of using a new page, use a Dialog instead. 
+## Quick start (web)
 
-# Using the Convex backend
+**Prerequisites:** [Bun](https://bun.sh) ≥ 1.1, a [Convex](https://convex.dev) account (free tier is fine).
 
-You will be implementing the convex backend. Follow your knowledge of convex and the documentation to implement the backend.
+```bash
+# 1. install
+bun install
 
-## The Convex Schema
+# 2. start the Convex backend (creates/links a deployment, generates types)
+bunx convex dev --once
+#    → for continuous dev: bunx convex dev
 
-You must correctly follow the convex schema implementation.
-
-The schema is defined in `src/convex/schema.ts`.
-
-Do not include the `_id` and `_creationTime` fields in your queries (it is included by default for each table).
-Do not index `_creationTime` as it is indexed for you. Never have duplicate indexes.
-
-
-## Convex Actions: Using CRUD operations
-
-When running anything that involves external connections, you must use a convex action with "use node" at the top of the file.
-
-You cannot have queries or mutations in the same file as a "use node" action file. Thus, you must use pre-built queries and mutations in other files.
-
-You can also use the pre-installed internal crud functions for the database:
-
-```ts
-// in convex/users.ts
-import { crud } from "convex-helpers/server/crud";
-import schema from "./schema.ts";
-
-export const { create, read, update, destroy } = crud(schema, "users");
-
-// in some file, in an action:
-const user = await ctx.runQuery(internal.users.read, { id: userId });
-
-await ctx.runMutation(internal.users.update, {
-  id: userId,
-  patch: {
-    status: "inactive",
-  },
-});
+# 3. run the web app
+bun run dev
 ```
 
+Open the printed URL (default `http://localhost:5173`), choose
+**Continue as guest** on the auth page, capture something, and tap the build
+figure 7 times to open the developer layer.
 
-## Common Convex Mistakes To Avoid
+### Environment variables
 
-When using convex, make sure:
-- Document IDs are referenced as `_id` field, not `id`.
-- Document ID types are referenced as `Id<"TableName">`, not `string`.
-- Document object types are referenced as `Doc<"TableName">`.
-- Keep schemaValidation to false in the schema file.
-- You must correctly type your code so that it passes the type checker.
-- You must handle null / undefined cases of your convex queries for both frontend and backend, or else it will throw an error that your data could be null or undefined.
-- Always use the `@/folder` path, with `@/convex/folder/file.ts` syntax for importing convex files.
-- This includes importing generated files like `@/convex/_generated/server`, `@/convex/_generated/api`
-- Remember to import functions like useQuery, useMutation, useAction, etc. from `convex/react`
-- NEVER have return type validators.
+| Variable | Required | Purpose |
+|---|---|---|
+| `VITE_CONVEX_URL` | yes | Convex deployment URL (written by `convex dev`) in `.env.local` |
+
+Email-OTP sign-in works out of the box through the bundled provider; anonymous
+sign-in needs no configuration. No other secrets are required for local dev.
+
+## Building the Android APK
+
+**Prerequisites:** JDK 17, Android SDK (or Android Studio), and one of
+`bun`/`npm`. On first run Gradle downloads itself via the wrapper.
+
+```bash
+# 1. build the web assets and sync them into the native shell
+bun run cap:sync          # = vite build && cap sync android
+
+# 2a. debug APK (signed with the debug key, installable immediately)
+bun run apk:debug
+#    → android/app/build/outputs/apk/debug/app-debug.apk
+
+# 2b. release APK (unsigned; see signing note below)
+bun run apk:release
+#    → android/app/build/outputs/apk/release/app-release-unsigned.apk
+```
+
+**Or skip all of it — download a prebuilt APK from
+[GitHub Releases](../../releases).** Every tag triggers a workflow that builds
+and attaches debug + release APKs automatically.
+
+### Signing a release build
+
+Create `android/keystore.properties` (git-ignored):
+
+```properties
+storeFile=/absolute/path/to/your-release-key.jks
+storePassword=••••••
+keyAlias=your-alias
+keyPassword=••••••
+```
+
+Generate a key once with:
+
+```bash
+keytool -genkey -v -keystore my-release-key.jks -keyalg RSA -keysize 2048 -validity 10000 -alias my-alias
+```
+
+**Never commit keystores or `keystore.properties`.** They are already in
+[.gitignore](.gitignore).
+
+## Testing
+
+```bash
+bun test src/lib     # 29 unit tests
+bun run typecheck    # strict TS across the app
+bun run lint         # eslint
+```
+
+The suite covers the pieces where correctness matters most:
+
+- **Crypto**: round-trips, wrong-key rejection (`OperationError`), tampered
+  ciphertext rejection, fresh salt/IV per encryption, KDF iteration floor.
+- **Capture parsing**: every kind tag, case-insensitivity, tag-position rules,
+  bare-URL auto-linking, title truncation.
+- **Vault store**: lock/unlock lifecycle, key replacement, subscriber events.
+- **Base64**: round-trips and standard fixtures.
+
+## Project structure
+
+```
+├── android/                  # Capacitor Android shell (Gradle project)
+├── public/                   # Static assets, PWA manifest
+├── src/
+│   ├── components/           # AppHeader, VaultCard, UnlockDialog, ui/ (shadcn)
+│   ├── convex/               # Backend: schema, auth, vault CRUD
+│   │   ├── schema.ts         #   users + authTables + vaultItems (indexed)
+│   │   ├── vault.ts          #   owner-scoped list/create/update/remove
+│   │   └── auth/             #   email OTP provider config
+│   ├── hooks/                # use-auth
+│   ├── lib/
+│   │   ├── crypto.ts         # AES-256-GCM + PBKDF2 envelope encryption
+│   │   ├── capture.ts        # capture-bar parsing (tags, URL detection)
+│   │   ├── vault-store.ts    # session-only key store (useSyncExternalStore)
+│   │   ├── base64.ts         # base64 helpers
+│   │   └── *.test.ts         # bun unit tests for the above
+│   └── pages/                # Landing, Auth, Dashboard, NotFound
+├── capacitor.config.ts       # native shell config (appId, webDir)
+├── .github/workflows/        # ci.yml (checks) + release.yml (APK artifacts)
+└── index.html                # entry (pre-paint dark theme script)
+```
+
+## Roadmap
+
+- [ ] Real GGUF loading via `wllama`/`llama.cpp` WASM in the model station
+- [ ] Signed OTA manifests with delta patching
+- [ ] iOS shell (`cap add ios`)
+- [ ] Vault export/import as an encrypted archive
+- [ ] Biometric unlock on Android (Keystore-wrapped key)
+
+See [CHANGELOG.md](CHANGELOG.md) for shipped work.
+
+## Contributing
+
+PRs welcome — read [CONTRIBUTING.md](CONTRIBUTING.md) first. Keep PRs focused,
+add tests for pure logic, and run `bun test src/lib && bun run typecheck`
+before pushing.
+
+## Security disclosures
+
+Found a vulnerability? Please **do not open a public issue** — follow
+[SECURITY.md](SECURITY.md).
+
+## License
+
+[MIT](LICENSE) © Secure Vault Hub contributors
+
+---
+
+<div align="center">
+
+*Built for one. Yours.*
+
+</div>
