@@ -36,6 +36,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { decryptString, encryptString, isVaultError } from "@/lib/crypto";
+import { parseCapture, titleFor } from "@/lib/capture";
 import { lockVault, unlockVault, useVaultUnlock } from "@/lib/vault-store";
 import { cn } from "@/lib/utils";
 import {
@@ -71,21 +72,6 @@ function writeLocal(key: string, value: string) {
   } catch {
     /* ignore */
   }
-}
-
-const KIND_TAG_RE = /^#(note|link|snippet|prompt|task)\b/i;
-
-function parseCapture(raw: string): { kind: VaultKind; body: string } {
-  const match = raw.trim().match(KIND_TAG_RE);
-  if (match) {
-    return { kind: match[1].toLowerCase() as VaultKind, body: raw.trim().slice(match[0].length).trim() };
-  }
-  return { kind: "note", body: raw.trim() };
-}
-
-function titleFor(body: string): string {
-  const first = body.replace(/\s+/g, " ").trim();
-  return first.length > 60 ? `${first.slice(0, 57)}…` : first || "Untitled";
 }
 
 /* ------------------------------- model station ---------------------------- */

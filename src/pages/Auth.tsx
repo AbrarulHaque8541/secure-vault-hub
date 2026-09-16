@@ -1,5 +1,4 @@
-import { VaultMark } from "@/components/AppHeader";
-import { ThemeToggle } from "@/components/AppHeader";
+import { ThemeToggle, VaultMark } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {

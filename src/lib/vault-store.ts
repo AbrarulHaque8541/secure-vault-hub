@@ -35,6 +35,16 @@ function getSnapshot(): VaultUnlockState {
   return state;
 }
 
+/** Read the vault state outside React (tests, imperative code). */
+export function getVaultState(): VaultUnlockState {
+  return getSnapshot();
+}
+
+/** Subscribe to vault state changes; returns an unsubscribe function. */
+export function subscribeToVault(listener: () => void): () => void {
+  return subscribe(listener);
+}
+
 export function useVaultUnlock(): VaultUnlockState {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
