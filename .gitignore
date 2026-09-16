@@ -43,3 +43,6 @@ bun.lock.bak
 coverage
 tsconfig.app.tsbuildinfo
 tsconfig.node.tsbuildinfo
+
+# NOTE: apks/*.apk is intentionally NOT ignored —
+# prebuilt APKs are committed so they can be downloaded directly from GitHub.
