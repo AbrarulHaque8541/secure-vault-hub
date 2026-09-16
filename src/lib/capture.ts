@@ -7,15 +7,22 @@ import type { VaultKind } from "@/components/VaultCard";
 
 export const KIND_TAG_RE = /^#(note|link|snippet|prompt|task)\b/i;
 
+/** A bare URL (at the start of the input) auto-files as a link. */
+const URL_RE = /^https?:\/\/\S+/i;
+
 export function parseCapture(raw: string): { kind: VaultKind; body: string } {
-  const match = raw.trim().match(KIND_TAG_RE);
+  const text = raw.trim();
+  const match = text.match(KIND_TAG_RE);
   if (match) {
     return {
       kind: match[1].toLowerCase() as VaultKind,
-      body: raw.trim().slice(match[0].length).trim(),
+      body: text.slice(match[0].length).trim(),
     };
   }
-  return { kind: "note", body: raw.trim() };
+  if (URL_RE.test(text)) {
+    return { kind: "link", body: text };
+  }
+  return { kind: "note", body: text };
 }
 
 export function titleFor(body: string): string {

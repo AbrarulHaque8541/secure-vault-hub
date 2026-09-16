@@ -55,6 +55,31 @@ describe("parseCapture", () => {
   test("handles a bare tag with empty body", () => {
     expect(parseCapture("#task")).toEqual({ kind: "task", body: "" });
   });
+
+  test("auto-files a bare URL as a link", () => {
+    expect(parseCapture("https://example.com/docs")).toEqual({
+      kind: "link",
+      body: "https://example.com/docs",
+    });
+    expect(parseCapture("http://localhost:5173/setup")).toEqual({
+      kind: "link",
+      body: "http://localhost:5173/setup",
+    });
+  });
+
+  test("an explicit #link tag still wins and is stripped from the body", () => {
+    expect(parseCapture("#link https://example.com")).toEqual({
+      kind: "link",
+      body: "https://example.com",
+    });
+  });
+
+  test("a URL not at the start stays a note", () => {
+    expect(parseCapture("read this later https://example.com")).toEqual({
+      kind: "note",
+      body: "read this later https://example.com",
+    });
+  });
 });
 
 describe("titleFor", () => {
