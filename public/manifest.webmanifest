@@ -1,7 +1,7 @@
 {
-  "name": "freebuff.com application",
-  "short_name": "freebuff.com",
-  "description": "freebuff.com application",
+  "name": "Secure Vault Hub",
+  "short_name": "Vault Hub",
+  "description": "Your personal, encrypted AI workspace — capture, encrypt, and run models locally.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

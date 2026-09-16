@@ -475,9 +475,9 @@ export default function Dashboard() {
         {/* Heading */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-mono-label">Vault</p>
+            <p className="text-mono-label">Your vault</p>
             <h1 className="text-display mt-3 text-2xl sm:text-3xl">
-              Welcome{user?.name ? `, ${user.name}` : ""}
+              Good to see you{user?.name ? `, ${user.name}` : ""}.
             </h1>
           </div>
           <div className="flex items-center gap-2">
@@ -511,13 +511,13 @@ export default function Dashboard() {
             className="bg-card px-5 py-4 text-left transition-colors hover:bg-secondary/60"
             aria-label={devUnlocked ? "Developer mode active" : "Build info"}
           >
-            <p className="text-mono-label">
+            <p className={devUnlocked ? "text-[11px] font-mono uppercase tracking-[0.22em] text-accent-lime" : "text-mono-label"}>
               {devUnlocked ? "Dev mode" : "Build"}
             </p>
             <p className="mt-2 flex items-center gap-2 text-sm font-medium">
               {devUnlocked ? (
                 <>
-                  <FlaskConical className="size-4 text-muted-foreground" />
+                  <FlaskConical className="size-4 text-accent-lime" />
                   active
                 </>
               ) : (
@@ -545,7 +545,7 @@ export default function Dashboard() {
             <input
               value={raw}
               onChange={(e) => setRaw(e.target.value)}
-              placeholder="Capture anything — try “weekly review #task” or “https://… #link”"
+              placeholder="Drop a thought, a link, a snippet — try “deploy checklist #task” or “https://… #link”"
               className="h-10 min-w-0 flex-1 bg-transparent text-[15px] text-foreground outline-none placeholder:text-muted-foreground/70"
             />
             <Button type="submit" size="sm" disabled={!raw.trim() || saving} className="rounded-md">
@@ -558,7 +558,7 @@ export default function Dashboard() {
                 #{parsed.kind}
               </Badge>
               <span className="text-xs text-muted-foreground">
-                {vaultLocked ? "Vault locked — you'll be asked for your key" : "Encrypted locally before sync"}
+                {vaultLocked ? "Vault locked — you'll be asked for your key" : "Sealed on this device, synced as ciphertext"}
               </span>
             </div>
           ) : null}
@@ -659,7 +659,7 @@ export default function Dashboard() {
             <VaultMark className="size-6 text-muted-foreground/60" />
             <p className="mt-4 text-sm font-medium">Nothing captured yet</p>
             <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
-              Use the bar above — every entry is encrypted on this device before it syncs.
+              Use the bar above — every entry is sealed with your key before it leaves this device.
             </p>
           </div>
         ) : filtered.length === 0 ? (
@@ -672,8 +672,8 @@ export default function Dashboard() {
         {devUnlocked && powerMode ? (
           <div className="mt-16 space-y-10 border-t border-border/70 pt-10">
             <div className="flex items-center gap-2.5">
-              <Terminal className="size-4 text-muted-foreground" />
-              <h2 className="text-sm font-medium">Developer</h2>
+              <Terminal className="size-4 text-accent-lime" />
+              <h2 className="text-sm font-medium">Developer layer</h2>
               <span className="text-mono-label ml-1">power mode</span>
             </div>
 
@@ -681,11 +681,11 @@ export default function Dashboard() {
             <section>
               <div className="flex items-end justify-between">
                 <div>
-                  <p className="text-mono-label">Model station</p>
+                  <p className="text-[11px] font-mono uppercase tracking-[0.22em] text-accent-lime">Model station</p>
                   <h3 className="mt-2 text-base font-medium">On-demand GGUF loader</h3>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Simulated downloader — profiles each model against this device, then loads it into the local runtime.
-                  </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Profiled against this device, fetched on demand, and loaded into the local GGUF runtime — nothing runs in someone else's cloud.
+                </p>
                 </div>
                 <Badge variant="outline" className="rounded-sm font-normal">
                   {loadedCount}/{MODEL_CATALOG.length} loaded
@@ -733,7 +733,7 @@ export default function Dashboard() {
 
             {/* Plugin sandbox */}
             <section>
-              <p className="text-mono-label">Plugin sandbox</p>
+              <p className="text-[11px] font-mono uppercase tracking-[0.22em] text-accent-iris">Plugin sandbox</p>
               <h3 className="mt-2 text-base font-medium">Capability-scoped extensions</h3>
               <p className="mt-1 text-xs text-muted-foreground">
                 Each plugin runs against a declared permission. Grant or revoke at any time; the log records every transition.
@@ -775,10 +775,10 @@ export default function Dashboard() {
 
             {/* OTA */}
             <section>
-              <p className="text-mono-label">Live updates</p>
+              <p className="text-[11px] font-mono uppercase tracking-[0.22em] text-accent-flare">Live updates</p>
               <h3 className="mt-2 text-base font-medium">OTA channel</h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                Simulated staged-rollout engine. Switching channels re-points the manifest; installs hot-swap in place.
+                Staged rollouts against a signed manifest. Switching channels re-points the manifest; installs hot-swap in place, no restart required.
               </p>
               <div className="mt-4 rounded-lg border border-border/80 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-4">
@@ -827,7 +827,7 @@ export default function Dashboard() {
           <span className="font-mono text-[11px] tracking-[0.18em]">AES-256-GCM · LOCAL-FIRST</span>
           {!devUnlocked ? (
             <span className="flex items-center gap-1 text-muted-foreground/60">
-              Seven taps on build number reveals developer mode
+              Seven taps on the build number opens the developer layer
               <ChevronDown className="size-3" />
             </span>
           ) : (
@@ -838,10 +838,10 @@ export default function Dashboard() {
                 setDevUnlocked(false);
                 writeLocal("vh-dev", "0");
                 togglePower(false);
-                toast("Developer mode disabled");
+                toast("Developer layer closed");
               }}
             >
-              Exit dev mode <ArrowUp className="size-3 rotate-180" />
+              Exit developer mode <ArrowUp className="size-3 rotate-180" />
             </button>
           )}
         </footer>

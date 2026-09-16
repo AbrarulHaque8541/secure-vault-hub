@@ -102,13 +102,13 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
           {step === "signIn" ? (
             <>
               <CardHeader className="pb-4 text-left">
-                <p className="text-mono-label">Kindling</p>
+                <p className="text-mono-label">Secure Vault Hub</p>
                 <CardTitle className="mt-3 text-lg font-medium tracking-tight">
                   Open your vault
                 </CardTitle>
                 <CardDescription className="text-sm leading-relaxed text-muted-foreground">
-                  Enter your email to sign in or create an account. A six-digit code
-                  will be sent to your inbox.
+                  One account, one vault — yours. Enter your email and we&apos;ll send
+                  a six-digit sign-in code.
                 </CardDescription>
               </CardHeader>
               <form onSubmit={handleEmailSubmit}>
@@ -238,7 +238,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
           )}
 
           <div className="rounded-b-lg border-t border-border/70 bg-secondary/60 px-6 py-3.5 text-center text-xs text-muted-foreground">
-            Keys are derived on-device and never transmitted.
+            Your vault key is derived on this device and never leaves it.
           </div>
         </Card>
       </main>

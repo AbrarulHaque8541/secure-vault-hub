@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 type Theme = "light" | "dark";
 
 const ThemeContext = createContext<{ theme: Theme; setTheme: (t: Theme) => void }>({
-  theme: "light",
+  theme: "dark",
   setTheme: () => {},
 });
 
@@ -18,7 +18,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     } catch {
       /* ignore */
     }
-    return "light";
+    return "dark";
   });
 
   useEffect(() => {

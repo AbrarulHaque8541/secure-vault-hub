@@ -93,7 +93,7 @@ export function VaultCard({
             className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             <Lock className="size-3" />
-            Unlock to reveal
+            Encrypted — tap to reveal
           </button>
         ) : (
           <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">

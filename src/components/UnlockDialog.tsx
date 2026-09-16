@@ -79,8 +79,8 @@ export function UnlockDialog({
           </DialogTitle>
           <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
             {mode === "set"
-              ? "Your key never leaves this device. Encryption happens locally before anything syncs."
-              : "Enter your vault key to decrypt entries for this session."}
+              ? "Choose something memorable — there's no reset link and no recovery email. The key lives on this device and nowhere else."
+              : "The vault re-locks whenever you leave. Enter your key to decrypt entries for this session."}
           </DialogDescription>
         </DialogHeader>
 

@@ -6,11 +6,26 @@
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Kindling — Local-first AI Vault</title>
+  <meta
+    name="description"
+    content="Secure Vault Hub — your personal, encrypted AI workspace. One capture bar, an AES-256 vault, local models, and a hidden developer layer."
+  />
+  <title>Secure Vault Hub — Your personal, encrypted AI workspace</title>
 </head>
 
 
 <body>
+  <script>
+    // Set theme class before first paint to avoid a light-mode flash.
+    try {
+      var t = localStorage.getItem("vault-hub-theme");
+      if (t === "dark" || (t !== "light" && true)) {
+        document.documentElement.classList.add("dark");
+      }
+    } catch (e) {
+      document.documentElement.classList.add("dark");
+    }
+  </script>
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
