@@ -1,13 +1,23 @@
 import type { Doc } from "@/convex/_generated/dataModel";
-import { Braces, CircleCheck, FileText, Link2, Lock, Sparkles, Star, Pencil, Trash2 } from "lucide-react";
+import {
+  Braces,
+  CircleCheck,
+  FileText,
+  Link2,
+  Lock,
+  Pencil,
+  Sparkles,
+  Star,
+  Trash2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export const KIND_META = {
-  note: { label: "Note", icon: FileText },
-  link: { label: "Link", icon: Link2 },
-  snippet: { label: "Snippet", icon: Braces },
-  prompt: { label: "Prompt", icon: Sparkles },
-  task: { label: "Task", icon: CircleCheck },
+  note: { label: "Note", icon: FileText, tone: "text-accent-flare", chip: "bg-accent-flare/12" },
+  link: { label: "Link", icon: Link2, tone: "text-accent-iris", chip: "bg-accent-iris/12" },
+  snippet: { label: "Snippet", icon: Braces, tone: "text-accent-lime", chip: "bg-accent-lime/12" },
+  prompt: { label: "Prompt", icon: Sparkles, tone: "text-accent-iris", chip: "bg-accent-iris/12" },
+  task: { label: "Task", icon: CircleCheck, tone: "text-accent-flare", chip: "bg-accent-flare/12" },
 } as const;
 
 export type VaultKind = keyof typeof KIND_META;
@@ -39,14 +49,24 @@ export function VaultCard({
   return (
     <div
       className={cn(
-        "group relative rounded-lg border border-border/80 bg-card p-5 transition-colors",
-        "hover:border-border",
+        "group relative overflow-hidden rounded-3xl border border-border/60 bg-card/70 backdrop-blur-sm transition-colors hover:border-border/90",
         busy && "opacity-60",
       )}
     >
-      <div className="flex items-start justify-between gap-3">
+      {/* per-kind tint wash */}
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-x-0 top-0 h-24 opacity-60",
+          meta.chip,
+        )}
+        style={{ maskImage: "linear-gradient(to bottom, black, transparent)", WebkitMaskImage: "linear-gradient(to bottom, black, transparent)" }}
+      />
+
+      <div className="relative flex items-start justify-between gap-3 p-5">
         <div className="flex min-w-0 items-start gap-3">
-          <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-xl", meta.chip)}>
+            <Icon className={cn("size-4", meta.tone)} />
+          </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
             <p className="mt-1 text-mono-label">{meta.label}</p>
@@ -58,9 +78,9 @@ export function VaultCard({
             aria-label={item.pinned ? "Unpin" : "Pin"}
             onClick={onTogglePin}
             className={cn(
-              "flex size-7 items-center justify-center rounded-md transition-colors",
+              "flex size-7 items-center justify-center rounded-full transition-colors",
               item.pinned
-                ? "text-foreground"
+                ? "text-accent-lime drop-shadow-[0_0_8px_color-mix(in_oklch,var(--accent-lime)_70%,transparent)]"
                 : "text-muted-foreground/40 hover:text-muted-foreground",
             )}
           >
@@ -70,7 +90,7 @@ export function VaultCard({
             type="button"
             aria-label="Edit"
             onClick={onEdit}
-            className="flex size-7 items-center justify-center rounded-md text-muted-foreground/40 transition-colors hover:text-foreground"
+            className="flex size-7 items-center justify-center rounded-full text-muted-foreground/40 transition-colors hover:text-foreground"
           >
             <Pencil className="size-3.5" />
           </button>
@@ -78,14 +98,14 @@ export function VaultCard({
             type="button"
             aria-label="Delete"
             onClick={onDelete}
-            className="flex size-7 items-center justify-center rounded-md text-muted-foreground/40 transition-colors hover:text-destructive"
+            className="flex size-7 items-center justify-center rounded-full text-muted-foreground/40 transition-colors hover:text-destructive"
           >
             <Trash2 className="size-3.5" />
           </button>
         </div>
       </div>
 
-      <div className="mt-4 border-t border-border/60 pt-3">
+      <div className="relative border-t border-border/50 px-5 pb-4 pt-3">
         {locked ? (
           <button
             type="button"

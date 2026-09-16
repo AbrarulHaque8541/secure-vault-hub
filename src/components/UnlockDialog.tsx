@@ -69,12 +69,12 @@ export function UnlockDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="max-w-sm gap-0 rounded-lg border-border/80 p-6 shadow-none sm:rounded-lg">
+      <DialogContent className="glass max-w-sm gap-0 rounded-3xl border-border/60 p-7 shadow-none sm:rounded-3xl">
         <DialogHeader className="text-left">
-          <div className="mb-4 flex size-9 items-center justify-center rounded-md border border-border/80">
-            <KeyRound className="size-4 text-muted-foreground" />
+          <div className="mb-4 flex size-10 items-center justify-center rounded-2xl bg-accent-lime/12">
+            <KeyRound className="size-4 text-accent-lime" />
           </div>
-          <DialogTitle className="text-base font-medium tracking-tight">
+          <DialogTitle className="text-display text-lg">
             {mode === "set" ? "Create vault key" : "Enter vault key"}
           </DialogTitle>
           <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
@@ -93,7 +93,7 @@ export function UnlockDialog({
               onChange={(e) => setPassphrase(e.target.value)}
               autoFocus
               disabled={busy}
-              className="h-10 rounded-md"
+              className="h-12 rounded-2xl bg-background/40"
             />
             {mode === "set" ? (
               <Input
@@ -102,7 +102,7 @@ export function UnlockDialog({
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
                 disabled={busy}
-                className="h-10 rounded-md"
+                className="h-12 rounded-2xl bg-background/40"
               />
             ) : null}
           </div>
@@ -111,7 +111,7 @@ export function UnlockDialog({
 
           <Button
             type="submit"
-            className="mt-6 h-10 w-full rounded-md"
+            className="mt-6 h-12 w-full rounded-2xl shadow-[0_0_24px_color-mix(in_oklch,var(--accent-lime)_35%,transparent)]"
             disabled={busy || !passphrase}
           >
             {busy ? <Loader2 className="size-4 animate-spin" /> : null}

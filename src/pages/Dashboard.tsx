@@ -468,137 +468,167 @@ export default function Dashboard() {
   const vaultLocked = !passphrase;
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <AppHeader devMode={devUnlocked} onPowerToggle={togglePower} />
+    <div className="page-ember relative min-h-screen overflow-x-clip text-foreground">
+      <AppHeader devMode={devUnlocked} onPowerToggle={togglePower} floating />
 
-      <main className="mx-auto w-full max-w-6xl px-6 py-10">
-        {/* Heading */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <main className="relative mx-auto w-full max-w-6xl px-6 pb-16 pt-6">
+        <div className="aurora -z-10 right-[-8rem] top-[-4rem] size-[24rem] bg-[oklch(0.62_0.2_25/0.22)]" />
+        <div className="aurora -z-10 bottom-[10rem] left-[-8rem] size-[22rem] bg-[oklch(0.77_0.19_128/0.16)]" />
+
+        {/* Kiro-style hero: greeting + gradient capture card + stat ring */}
+        <div className="grid items-center gap-10 lg:grid-cols-[1fr_280px]">
           <div>
-            <p className="text-mono-label">Your vault</p>
-            <h1 className="text-display mt-3 text-2xl sm:text-3xl">
-              Good to see you{user?.name ? `, ${user.name}` : ""}.
-            </h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="text-muted-foreground hover:text-foreground"
+            <p className="text-sm text-muted-foreground">
+              Good to see you{user?.name ? `, ${user.name}` : ""}
+            </p>
+            <h1 className="text-display mt-1 text-3xl sm:text-4xl">Your vault, sealed and yours.</h1>
+
+            {/* Capture hero card */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void handleCapture();
+              }}
+              className="glow-card mt-7 p-5 sm:p-6"
+              style={{ "--glow-a": "oklch(0.62 0.2 25 / 45%)", "--glow-b": "oklch(0.77 0.19 128 / 30%)" } as React.CSSProperties}
             >
-              {theme === "dark" ? "Light" : "Dark"}
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleSignOut} className="rounded-md">
-              Sign out
-            </Button>
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="mt-8 grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-border/70 bg-border/70">
-          <div className="bg-card px-5 py-4">
-            <p className="text-mono-label">Captured</p>
-            <p className="mt-2 text-2xl font-medium tabular-nums">{items.length}</p>
-          </div>
-          <div className="bg-card px-5 py-4">
-            <p className="text-mono-label">Pinned</p>
-            <p className="mt-2 text-2xl font-medium tabular-nums">{pinnedCount}</p>
-          </div>
-          <button
-            type="button"
-            onClick={handleVersionTap}
-            className="bg-card px-5 py-4 text-left transition-colors hover:bg-secondary/60"
-            aria-label={devUnlocked ? "Developer mode active" : "Build info"}
-          >
-            <p className={devUnlocked ? "text-[11px] font-mono uppercase tracking-[0.22em] text-accent-lime" : "text-mono-label"}>
-              {devUnlocked ? "Dev mode" : "Build"}
-            </p>
-            <p className="mt-2 flex items-center gap-2 text-sm font-medium">
-              {devUnlocked ? (
-                <>
-                  <FlaskConical className="size-4 text-accent-lime" />
-                  active
-                </>
-              ) : (
-                <>
-                  v0.5.0
-                  <span className="font-mono text-[11px] text-muted-foreground">
-                    {taps > 0 ? `${taps}/7` : "build 42"}
+              <div className="flex items-center gap-3">
+                <Plus className="size-4 shrink-0 text-foreground/70" />
+                <input
+                  value={raw}
+                  onChange={(e) => setRaw(e.target.value)}
+                  placeholder="Drop a thought, a link, a snippet — try “deploy checklist #task” or “https://… #link”"
+                  className="h-9 min-w-0 flex-1 bg-transparent text-[15px] text-foreground outline-none placeholder:text-foreground/40"
+                />
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={!raw.trim() || saving}
+                  className="rounded-full bg-foreground/85 text-background hover:bg-foreground"
+                >
+                  {saving ? "Saving…" : "Capture"}
+                </Button>
+              </div>
+              {raw.trim() ? (
+                <div className="mt-4 flex items-center gap-2.5 border-t border-foreground/10 pt-3">
+                  <Badge variant="secondary" className="rounded-full font-normal">
+                    #{parsed.kind}
+                  </Badge>
+                  <span className="text-xs text-foreground/55">
+                    {vaultLocked ? "Vault locked — you'll be asked for your key" : "Sealed on this device, synced as ciphertext"}
                   </span>
-                </>
+                </div>
+              ) : null}
+            </form>
+
+            <div className="mt-4 flex items-center justify-between gap-3 rounded-full border border-border/60 bg-card/50 px-4 py-2 backdrop-blur-sm">
+              <div className="flex items-center gap-2 text-sm">
+                {vaultLocked ? (
+                  <Lock className="size-3.5 text-muted-foreground" />
+                ) : (
+                  <LockOpen className="size-3.5 text-accent-lime drop-shadow-[0_0_8px_color-mix(in_oklch,var(--accent-lime)_60%,transparent)]" />
+                )}
+                {vaultLocked ? (
+                  <span className="text-muted-foreground">
+                    Vault locked{hasKey ? " — session key cleared" : " — no key set yet"}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    Vault unlocked
+                    <span className="ml-2 font-mono text-[11px] text-muted-foreground/70">
+                      session key · {unlockedAt ? new Date(unlockedAt).toLocaleTimeString() : ""}
+                    </span>
+                  </span>
+                )}
+              </div>
+              {vaultLocked ? (
+                <Button variant="ghost" size="sm" className="rounded-full" onClick={() => setDialog({ mode: hasKey ? "enter" : "set" })}>
+                  Unlock vault
+                </Button>
+              ) : (
+                <Button variant="ghost" size="sm" className="rounded-full text-muted-foreground" onClick={lockVault}>
+                  Lock
+                </Button>
               )}
-            </p>
-          </button>
+            </div>
+          </div>
+
+          {/* Stat ring card */}
+          <div className="glass hidden rounded-3xl p-6 lg:block">
+            <div className="mx-auto flex size-40 items-center justify-center rounded-full"
+              style={{
+                background:
+                  "conic-gradient(var(--accent-lime) 0deg, var(--accent-iris) 130deg, var(--accent-flare) 230deg, color-mix(in oklch, var(--foreground) 8%, transparent) 230deg)",
+              }}
+            >
+              <div className="flex size-[8.25rem] flex-col items-center justify-center rounded-full bg-background">
+                <span className="font-dot text-4xl leading-none text-foreground">{items.length}</span>
+                <span className="text-mono-label mt-1.5">captured</span>
+              </div>
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-2 text-center">
+              <div className="rounded-2xl bg-foreground/4 px-3 py-2.5">
+                <p className="font-dot text-xl text-foreground">{pinnedCount}</p>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">pinned</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleVersionTap}
+                className="rounded-2xl bg-foreground/4 px-3 py-2.5 transition-colors hover:bg-foreground/8"
+                aria-label={devUnlocked ? "Developer mode active" : "Build info"}
+              >
+                {devUnlocked ? (
+                  <>
+                    <p className="flex items-center justify-center gap-1.5 font-dot text-xl text-accent-lime drop-shadow-[0_0_10px_color-mix(in_oklch,var(--accent-lime)_70%,transparent)]">
+                      <FlaskConical className="size-3.5" />
+                      DEV
+                    </p>
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-accent-lime/80">mode active</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-dot text-xl text-foreground">v0.5</p>
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                      {taps > 0 ? `${taps}/7 taps` : "build 42"}
+                    </p>
+                  </>
+                )}
+              </button>
+            </div>
+            <div className="mt-4 flex items-center justify-between">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="rounded-full text-muted-foreground"
+                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              >
+                {theme === "dark" ? "Light" : "Dark"}
+              </Button>
+              <Button variant="ghost" size="sm" className="rounded-full text-muted-foreground" onClick={handleSignOut}>
+                Sign out
+              </Button>
+            </div>
+          </div>
         </div>
 
-        {/* Capture bar */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void handleCapture();
-          }}
-          className="mt-6 rounded-lg border border-border/80 bg-card p-2"
-        >
-          <div className="flex items-center gap-2 pl-2">
-            <Plus className="size-4 shrink-0 text-muted-foreground" />
-            <input
-              value={raw}
-              onChange={(e) => setRaw(e.target.value)}
-              placeholder="Drop a thought, a link, a snippet — try “deploy checklist #task” or “https://… #link”"
-              className="h-10 min-w-0 flex-1 bg-transparent text-[15px] text-foreground outline-none placeholder:text-muted-foreground/70"
-            />
-            <Button type="submit" size="sm" disabled={!raw.trim() || saving} className="rounded-md">
-              {saving ? "Saving…" : "Capture"}
-            </Button>
-          </div>
-          {raw.trim() ? (
-            <div className="flex items-center gap-2 border-t border-border/60 px-2 pb-1 pt-2.5">
-              <Badge variant="secondary" className="rounded-sm font-normal">
-                #{parsed.kind}
-              </Badge>
-              <span className="text-xs text-muted-foreground">
-                {vaultLocked ? "Vault locked — you'll be asked for your key" : "Sealed on this device, synced as ciphertext"}
-              </span>
-            </div>
-          ) : null}
-        </form>
-
-        {/* Vault status strip */}
-        <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-secondary/50 px-4 py-2.5">
-          <div className="flex items-center gap-2 text-sm">
-            {vaultLocked ? (
-              <Lock className="size-3.5 text-muted-foreground" />
-            ) : (
-              <LockOpen className="size-3.5 text-muted-foreground" />
-            )}
-            {vaultLocked ? (
-              <span className="text-muted-foreground">
-                Vault locked{hasKey ? " — session key cleared" : " — no key set yet"}
-              </span>
-            ) : (
-              <span className="text-muted-foreground">
-                Vault unlocked
-                <span className="ml-2 font-mono text-[11px] text-muted-foreground/70">
-                  session key · {unlockedAt ? new Date(unlockedAt).toLocaleTimeString() : ""}
-                </span>
-              </span>
-            )}
-          </div>
-          {vaultLocked ? (
-            <Button variant="ghost" size="sm" onClick={() => setDialog({ mode: hasKey ? "enter" : "set" })}>
-              Unlock vault
-            </Button>
-          ) : (
-            <Button variant="ghost" size="sm" onClick={lockVault} className="text-muted-foreground">
-              Lock
-            </Button>
-          )}
+        {/* Mobile sign-out row */}
+        <div className="mt-6 flex items-center justify-end gap-2 lg:hidden">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="rounded-full text-muted-foreground"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          >
+            {theme === "dark" ? "Light" : "Dark"}
+          </Button>
+          <Button variant="outline" size="sm" className="rounded-full" onClick={handleSignOut}>
+            Sign out
+          </Button>
         </div>
 
         {/* Filters */}
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-1">
+        <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-1.5">
             {(["all", ...KINDS, "pinned"] as const).map((k) => {
               const active = kindFilter === k;
               const label =
@@ -609,10 +639,10 @@ export default function Dashboard() {
                   type="button"
                   onClick={() => setKindFilter(k)}
                   className={cn(
-                    "rounded-md px-2.5 py-1 text-xs transition-colors",
+                    "rounded-full px-3.5 py-1.5 text-xs transition-colors",
                     active
                       ? "bg-foreground text-background"
-                      : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                      : "text-muted-foreground hover:bg-foreground/8 hover:text-foreground",
                   )}
                 >
                   {label}
@@ -621,12 +651,12 @@ export default function Dashboard() {
             })}
           </div>
           <div className="relative w-full sm:w-60">
-            <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute left-3.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search titles"
-              className="h-8 rounded-md pl-8 text-xs"
+              className="h-9 rounded-full bg-card/60 pl-9 text-xs"
             />
           </div>
         </div>
@@ -655,7 +685,7 @@ export default function Dashboard() {
         </div>
 
         {items.length === 0 ? (
-          <div className="mt-5 flex flex-col items-center rounded-lg border border-dashed border-border/80 px-6 py-16 text-center">
+          <div className="glass mt-5 flex flex-col items-center rounded-3xl px-6 py-16 text-center">
             <VaultMark className="size-6 text-muted-foreground/60" />
             <p className="mt-4 text-sm font-medium">Nothing captured yet</p>
             <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
@@ -663,14 +693,14 @@ export default function Dashboard() {
             </p>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="mt-5 rounded-lg border border-dashed border-border/80 px-6 py-14 text-center">
+          <div className="glass mt-5 rounded-3xl px-6 py-14 text-center">
             <p className="text-sm text-muted-foreground">No entries match this filter.</p>
           </div>
         ) : null}
 
         {/* ---------------------------- Power sections ---------------------------- */}
         {devUnlocked && powerMode ? (
-          <div className="mt-16 space-y-10 border-t border-border/70 pt-10">
+          <div className="mt-16 space-y-10 border-t border-border/60 pt-10">
             <div className="flex items-center gap-2.5">
               <Terminal className="size-4 text-accent-lime" />
               <h2 className="text-sm font-medium">Developer layer</h2>
@@ -691,7 +721,7 @@ export default function Dashboard() {
                   {loadedCount}/{MODEL_CATALOG.length} loaded
                 </Badge>
               </div>
-              <div className="mt-4 divide-y divide-border/60 rounded-lg border border-border/80">
+              <div className="mt-4 divide-y divide-border/50 overflow-hidden rounded-3xl border border-border/60 bg-card/60 backdrop-blur-sm">
                 {MODEL_CATALOG.map((m) => {
                   const dl = downloads[m.id];
                   const done = dl?.status === "done";
@@ -739,7 +769,7 @@ export default function Dashboard() {
                 Each plugin runs against a declared permission. Grant or revoke at any time; the log records every transition.
               </p>
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <div className="divide-y divide-border/60 rounded-lg border border-border/80">
+                <div className="divide-y divide-border/50 overflow-hidden rounded-3xl border border-border/60 bg-card/60 backdrop-blur-sm">
                   {SANDBOX_PLUGINS.map((p) => {
                     const on = installed.includes(p.id);
                     return (
@@ -764,10 +794,12 @@ export default function Dashboard() {
                 </div>
                 <div
                   ref={logRef}
-                  className="h-40 overflow-y-auto rounded-lg border border-border/80 bg-secondary/40 p-3 font-mono text-[11px] leading-relaxed text-muted-foreground"
+                  className="h-40 overflow-y-auto rounded-3xl border border-border/60 bg-background/60 p-4 font-mono text-[11px] leading-relaxed text-muted-foreground"
                 >
                   {log.map((line, i) => (
-                    <p key={i}>{line}</p>
+                    <p key={i}>
+                      <span className="text-accent-lime">›</span> {line}
+                    </p>
                   ))}
                 </div>
               </div>
@@ -780,7 +812,7 @@ export default function Dashboard() {
               <p className="mt-1 text-xs text-muted-foreground">
                 Staged rollouts against a signed manifest. Switching channels re-points the manifest; installs hot-swap in place, no restart required.
               </p>
-              <div className="mt-4 rounded-lg border border-border/80 p-4">
+              <div className="mt-4 rounded-3xl border border-border/60 bg-card/60 p-5 backdrop-blur-sm">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="flex items-center gap-1">
                     {CHANNELS.map((ch) => (
@@ -789,10 +821,10 @@ export default function Dashboard() {
                         type="button"
                         onClick={() => pickChannel(ch)}
                         className={cn(
-                          "rounded-md px-3 py-1.5 font-mono text-xs transition-colors",
+                          "rounded-full px-4 py-1.5 font-mono text-xs transition-colors",
                           channel === ch
-                            ? "bg-foreground text-background"
-                            : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                            ? "bg-accent-flare text-background shadow-[0_0_16px_color-mix(in_oklch,var(--accent-flare)_45%,transparent)]"
+                            : "text-muted-foreground hover:bg-foreground/8 hover:text-foreground",
                         )}
                       >
                         {ch}
@@ -823,7 +855,7 @@ export default function Dashboard() {
         ) : null}
 
         {/* Footer hint */}
-        <footer className="mt-16 flex items-center justify-between border-t border-border/70 pt-6 text-xs text-muted-foreground">
+        <footer className="mt-16 flex items-center justify-between border-t border-border/60 pt-6 text-xs text-muted-foreground">
           <span className="font-mono text-[11px] tracking-[0.18em]">AES-256-GCM · LOCAL-FIRST</span>
           {!devUnlocked ? (
             <span className="flex items-center gap-1 text-muted-foreground/60">
@@ -863,20 +895,18 @@ export default function Dashboard() {
       />
 
       <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent className="max-w-sm gap-0 rounded-lg border-border/80 p-6 shadow-none sm:rounded-lg">
+        <AlertDialogContent className="glass max-w-sm gap-0 rounded-3xl border-border/60 p-7 shadow-none sm:rounded-3xl">
           <AlertDialogHeader className="text-left">
-            <AlertDialogTitle className="text-base font-medium tracking-tight">
-              Delete this entry?
-            </AlertDialogTitle>
+            <AlertDialogTitle className="text-display text-lg">Delete this entry?</AlertDialogTitle>
             <AlertDialogDescription className="text-sm leading-relaxed text-muted-foreground">
               “{deleteTarget?.title}” will be permanently removed. This can&apos;t be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="mt-6 gap-2">
-            <AlertDialogCancel className="rounded-md">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-full">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => void handleDelete()}
-              className="rounded-md bg-destructive text-white hover:bg-destructive/90"
+              className="rounded-full bg-destructive text-white hover:bg-destructive/90"
             >
               Delete
             </AlertDialogAction>
@@ -918,9 +948,9 @@ function EditDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md gap-0 rounded-lg border-border/80 p-6 shadow-none sm:rounded-lg">
+      <DialogContent className="glass max-w-md gap-0 rounded-3xl border-border/60 p-7 shadow-none sm:rounded-3xl">
         <DialogHeader className="text-left">
-          <DialogTitle className="text-base font-medium tracking-tight">Edit entry</DialogTitle>
+          <DialogTitle className="text-display text-lg">Edit entry</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
             Changes are re-encrypted with your session key before saving.
           </DialogDescription>
@@ -929,12 +959,12 @@ function EditDialog({
           <div className="grid grid-cols-[110px_1fr] items-center gap-3">
             <span className="text-mono-label">Kind</span>
             <Select value={kind} onValueChange={(v) => setKind(v as VaultKind)}>
-              <SelectTrigger className="h-9 rounded-md">
+              <SelectTrigger className="h-10 rounded-2xl bg-background/40">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="rounded-2xl">
                 {KINDS.map((k) => (
-                  <SelectItem key={k} value={k} className="rounded-sm">
+                  <SelectItem key={k} value={k} className="rounded-xl">
                     {KIND_META[k].label}
                   </SelectItem>
                 ))}
@@ -943,7 +973,7 @@ function EditDialog({
           </div>
           <div className="grid grid-cols-[110px_1fr] items-center gap-3">
             <span className="text-mono-label">Title</span>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} className="h-9 rounded-md" />
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} className="h-10 rounded-2xl bg-background/40" />
           </div>
           <div className="grid grid-cols-[110px_1fr] items-start gap-3">
             <span className="pt-2 text-mono-label">Body</span>
@@ -951,12 +981,12 @@ function EditDialog({
               value={body}
               onChange={(e) => setBody(e.target.value)}
               placeholder="Original body stays encrypted — type replacement text here."
-              className="min-h-28 rounded-md text-sm"
+              className="min-h-28 rounded-2xl bg-background/40 text-sm"
             />
           </div>
         </div>
         <DialogFooter className="mt-6 gap-2">
-          <Button variant="ghost" onClick={onClose} className="rounded-md text-muted-foreground">
+          <Button variant="ghost" onClick={onClose} className="rounded-full text-muted-foreground">
             Cancel
           </Button>
           <Button
@@ -965,7 +995,7 @@ function EditDialog({
               setBusy(true);
               await onSave(kind, title, body);
             }}
-            className="rounded-md"
+            className="rounded-full"
           >
             Save changes
           </Button>
