@@ -14,13 +14,18 @@ bun run dev
 
 ## Before you push
 
-Run all three — CI runs the same set:
+One command — it runs exactly what CI runs (typecheck, lint, tests, build):
 
 ```bash
-bun test src/lib      # unit tests
-bun run typecheck     # strict TypeScript
-bun run lint          # eslint
+bun run verify
 ```
+
+If it's green locally, CI will be green. CI additionally guards against
+tracked secret files (`.env*`, keystores) and missing Convex generated types.
+
+**Changed anything under `src/convex/`?** Run `bunx convex codegen` and
+**commit** the regenerated `src/convex/_generated/` files — CI cannot run
+codegen itself (it needs deployment auth), so uncommitted types break CI.
 
 ## Ground rules
 
@@ -37,8 +42,10 @@ bun run lint          # eslint
 5. **Respect the design system.** Use existing tokens/utilities from
    `src/index.css` (`glow-card`, `glass`, accent variables) before inventing
    new ones.
-6. **Don't edit generated code.** `src/convex/_generated/` and
-   `android/app/src/main/assets/public/` are build outputs.
+6. **Generated code is committed, never hand-edited.** `src/convex/_generated/`
+   and `android/app/src/main/assets/public/` are build outputs — regenerate
+   them (`bunx convex codegen`, `bun run cap:sync`), never edit by hand, and
+   always commit the regenerated result so CI stays deterministic.
 
 ## Commit style
 

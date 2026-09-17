@@ -13,6 +13,7 @@
     "preview": "vite preview",
     "test": "bun test src/lib",
     "typecheck": "tsc -b --noEmit",
+    "verify": "bun run typecheck && bun run lint && bun test src/lib && bun run build",
     "convex:dev": "convex dev --once",
     "cap:sync": "vite build && cap sync android",
     "cap:open": "cap open android",
