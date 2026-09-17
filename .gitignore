@@ -3,12 +3,12 @@ node_modules
 
 # Build output
 dist
-src/convex/_generated
 
 # Environment / secrets — never commit
 .env
 .env.local
 .env.*.local
+.env.keys
 
 # Capacitor / Android build outputs
 android/.gradle

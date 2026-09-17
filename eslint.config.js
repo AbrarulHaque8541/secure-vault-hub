@@ -6,7 +6,14 @@ import tseslint from "typescript-eslint";
 import eslintConfigPrettier from "eslint-config-prettier/flat";
 
 export default tseslint.config(
-  { ignores: ["dist"] },
+  {
+    ignores: [
+      "dist",
+      "android/**",
+      "src/convex/_generated/**",
+      "apks/**",
+    ],
+  },
   {
     extends: [
       js.configs.recommended,
@@ -24,6 +31,12 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      // react-hooks v6 enables two experimental rules by default that flag
+      // intentional patterns shipped by shadcn/ui primitives (synchronous
+      // setState in mount effects, Date.now() during render for display
+      // staleness). Re-enable per-file if you refactor those components.
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/purity": "off",
       "react-refresh/only-export-components": [
         "warn",
         { allowConstantExport: true },

@@ -23,36 +23,27 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # Capacitor 8 requires Java 21 (JDK 17 fails with an unsupported
+      # class-file-version error during Gradle compilation).
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
 
       - uses: android-actions/setup-android@v3
 
-      - name: Stub Convex generated types
-        run: |
-          mkdir -p src/convex/_generated
-          cat > src/convex/_generated/api.d.ts <<'EOF'
-          // CI stub — replaced locally by `convex dev`
-          export declare const api: Record<string, unknown>;
-          export declare const anyApi: { [k: string]: any };
-          EOF
-          cat > src/convex/_generated/api.js <<'EOF'
-          export const anyApi = new Proxy({}, { get: () => new Proxy(() => {}, { get: () => ({}), apply: () => ({}) }) });
-          export const api = anyApi;
-          EOF
-          cat > src/convex/_generated/dataModel.d.ts <<'EOF'
-          // CI stub — replaced locally by `convex dev`
-          export type DataModel = Record<string, never>;
-          EOF
-
-      - name: Build web assets and sync to Android
-        run: bunx cap sync android
+      # Fresh CI runners have no dist/ — build the web assets first, then
+      # copy them into the Android project. Committed src/convex/_generated
+      # types make `tsc -b` inside `vite build` work without a deployment.
+      - name: Build web assets
+        run: bun run build
         env:
           # Set this repo secret so released APKs talk to your real Convex
           # deployment. Without it, the APK installs but has no backend.
           VITE_CONVEX_URL: ${{ secrets.VITE_CONVEX_URL || 'https://ci-placeholder.convex.cloud' }}
+
+      - name: Sync web assets to Android
+        run: bunx cap sync android
 
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew

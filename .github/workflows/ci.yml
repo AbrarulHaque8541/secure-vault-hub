@@ -24,6 +24,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # Works because src/convex/_generated is committed to the repo.
+      # After changing anything under src/convex/, run `bunx convex codegen`
+      # locally and commit the regenerated files — CI fails otherwise.
       - name: Typecheck
         run: bun run typecheck
 
@@ -44,26 +47,8 @@ jobs:
         with:
           bun-version: latest
 
-      # Convex codegen isn't needed for a build sanity check: the committed
-      # _generated types are excluded from VCS and CI only proves `vite build`
-      # succeeds against a fresh `convex dev` run locally. CI verifies the
-      # toolchain, not deployment.
-      - name: Stub Convex generated types
-        run: |
-          mkdir -p src/convex/_generated
-          cat > src/convex/_generated/api.d.ts <<'EOF'
-          // CI stub — replaced locally by `convex dev`
-          export declare const api: Record<string, unknown>;
-          export declare const anyApi: { [k: string]: any };
-          EOF
-          cat > src/convex/_generated/api.js <<'EOF'
-          export const anyApi = new Proxy({}, { get: () => new Proxy(() => {}, { get: () => ({}), apply: () => ({}) }) });
-          export const api = anyApi;
-          EOF
-          cat > src/convex/_generated/dataModel.d.ts <<'EOF'
-          // CI stub — replaced locally by `convex dev`
-          export type DataModel = Record<string, never>;
-          EOF
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
       - name: Build
         run: bun run build
