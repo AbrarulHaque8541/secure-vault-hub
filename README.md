@@ -42,8 +42,8 @@ the feature map.
 Secure Vault Hub is a **single-user, zero-knowledge personal vault**. You
 capture anything — a thought, a URL, a code snippet, a prompt, a task — and it
 is encrypted **on your device** before it ever touches the network. The sync
-backend stores only opaque ciphertext; not even the database operator can read
-your entries.
+backend stores the body as opaque ciphertext, but note that **entry titles are
+stored as plaintext metadata** (see the security notes below).
 
 Beyond the vault there is a developer layer (hidden behind the 7-tap build
 figure): a GGUF model station, a plugin sandbox, and OTA channels. These are
@@ -60,7 +60,7 @@ no APK is installed. They are honest placeholders for the roadmap.
 |---|---|---|
 | Capture | Universal capture bar with `#note` `#link` `#snippet` `#prompt` `#task` tags; bare URLs auto-file as links | `src/lib/capture.ts`, `src/pages/Dashboard.tsx` |
 | Vault | Per-entry AES-256-GCM sealing, pin, edit (re-encrypt on save), filter, search, delete-with-confirm | `src/lib/crypto.ts`, `src/components/VaultCard.tsx` |
-| Storage | Owner-scoped CRUD on Convex with per-user indexes; ciphertext-only storage | `src/convex/vault.ts`, `src/convex/schema.ts` |
+| Storage | Owner-scoped CRUD on Convex with per-user indexes; bodies stored as opaque ciphertext, **title/hint metadata is plaintext** (known exposure) | `src/convex/vault.ts`, `src/convex/schema.ts` |
 | Model station | GGUF catalog (Qwen2.5, Llama 3.2, Gemma 2, Phi-3.5) with params/quant/context/license profiles — **prototype (simulated)**, no real download | `src/pages/Dashboard.tsx` |
 | Power modes | 7-tap hidden dev unlock, master power toggle, plugin sandbox grants/revokes — **prototype (simulated)**, no manifest/broker/enforcement | `src/pages/Dashboard.tsx`, `src/components/AppHeader.tsx` |
 | CLI bridge | Termux-style shell-lane plugin (roadmap scaffold) | `src/pages/Dashboard.tsx` |
