@@ -5,8 +5,9 @@
 **Your second brain. Nobody else's.**
 
 A local-first encrypted vault for notes, links, snippets, prompts and tasks —
-sealed with AES-256-GCM on your device, with an on-demand local GGUF model
-station, a plugin sandbox, and OTA update channels.
+sealed with AES-256-GCM on your device. The developer layer (GGUF model
+station, plugin sandbox, OTA) is currently a **prototype (simulated)** — see
+the feature map.
 
 `React 19` · `Vite` · `Convex` · `Tailwind v4` · `Capacitor` · `WebCrypto`
 
@@ -44,10 +45,11 @@ is encrypted **on your device** before it ever touches the network. The sync
 backend stores only opaque ciphertext; not even the database operator can read
 your entries.
 
-Beyond the vault, it ships a developer layer: a local GGUF model station that
-profiles models against your hardware, a permissioned plugin sandbox with a
-live log, and OTA update channels (alpha / beta / stable) — all inside one
-dark, minimal, deliberately playful interface.
+Beyond the vault there is a developer layer (hidden behind the 7-tap build
+figure): a GGUF model station, a plugin sandbox, and OTA channels. These are
+currently **prototypes (simulated)** — progress and "loaded"/"update applied"
+states are simulated; no model is downloaded, no sandbox/seccomp exists, and
+no APK is installed. They are honest placeholders for the roadmap.
 
 > **Hidden dev menu:** tap the build figure in the dashboard stat ring
 > **7 times**. A countdown appears from the 3rd tap.
@@ -59,10 +61,10 @@ dark, minimal, deliberately playful interface.
 | Capture | Universal capture bar with `#note` `#link` `#snippet` `#prompt` `#task` tags; bare URLs auto-file as links | `src/lib/capture.ts`, `src/pages/Dashboard.tsx` |
 | Vault | Per-entry AES-256-GCM sealing, pin, edit (re-encrypt on save), filter, search, delete-with-confirm | `src/lib/crypto.ts`, `src/components/VaultCard.tsx` |
 | Storage | Owner-scoped CRUD on Convex with per-user indexes; ciphertext-only storage | `src/convex/vault.ts`, `src/convex/schema.ts` |
-| Model station | GGUF catalog (Qwen2.5, Llama 3.2, Gemma 2, Phi-3.5) with params/quant/context/license profiles and simulated download lanes | `src/pages/Dashboard.tsx` |
-| Power modes | 7-tap hidden dev unlock, master power toggle, plugin sandbox with permission grants/revokes and live terminal log | `src/pages/Dashboard.tsx`, `src/components/AppHeader.tsx` |
+| Model station | GGUF catalog (Qwen2.5, Llama 3.2, Gemma 2, Phi-3.5) with params/quant/context/license profiles — **prototype (simulated)**, no real download | `src/pages/Dashboard.tsx` |
+| Power modes | 7-tap hidden dev unlock, master power toggle, plugin sandbox grants/revokes — **prototype (simulated)**, no manifest/broker/enforcement | `src/pages/Dashboard.tsx`, `src/components/AppHeader.tsx` |
 | CLI bridge | Termux-style shell-lane plugin (roadmap scaffold) | `src/pages/Dashboard.tsx` |
-| OTA engine | Alpha/beta/stable channels, manifest check, staged install with progress | `src/pages/Dashboard.tsx` |
+| OTA engine | Alpha/beta/stable channels — **prototype (simulated)**, versions hardcoded, no APK install | `src/pages/Dashboard.tsx` |
 | Theming | Dark-first design system with ember/iris/mint/rose glow cards, dot-matrix numerals, light mode | `src/index.css`, `src/components/theme-provider.tsx` |
 
 ## Security model
