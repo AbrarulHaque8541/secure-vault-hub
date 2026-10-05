@@ -211,6 +211,25 @@ export default function Dashboard() {
     return () => Object.values(ints).forEach((id) => window.clearInterval(id));
   }, []);
 
+  /* ---------------------------- auto-lock vault ---------------------------- */
+
+  // Auto-lock a fixed window after unlock so a shared device doesn't keep the
+  // vault decrypted indefinitely. The key is never persisted, so this only
+  // clears the in-memory session state.
+  const VAULT_AUTO_LOCK_MS = 5 * 60 * 1000; // 5 minutes
+
+  useEffect(() => {
+    if (!passphrase || !unlockedAt) return;
+    const elapsed = Date.now() - unlockedAt;
+    const remaining = Math.max(0, VAULT_AUTO_LOCK_MS - elapsed);
+    const t = window.setTimeout(() => {
+      lockVault();
+      setHasKey(false);
+      toast.info("Vault locked", { description: "Auto-locked after inactivity." });
+    }, remaining);
+    return () => window.clearTimeout(t);
+  }, [passphrase, unlockedAt]);
+
   const startDownload = (model: CatalogModel) => {
     if (downloads[model.id]?.status === "downloading") return;
     setDownloads((d) => ({ ...d, [model.id]: { progress: 0, status: "downloading" } }));

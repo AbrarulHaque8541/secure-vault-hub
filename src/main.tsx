@@ -85,6 +85,15 @@ const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
 
 
+// Only accept navigation control from our own parent frame on a trusted
+// origin. Blocks arbitrary cross-origin pages from driving history via
+// postMessage (previously any origin could send {type:"navigate"}).
+const TRUSTED_PARENT_ORIGINS = new Set<string>([
+  window.location.origin,
+  "https://freebuff.com",
+  "https://integrations.freebuff.com",
+]);
+
 function RouteSyncer() {
   const location = useLocation();
   useEffect(() => {
@@ -96,10 +105,11 @@ function RouteSyncer() {
 
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
-      if (event.data?.type === "navigate") {
-        if (event.data.direction === "back") window.history.back();
-        if (event.data.direction === "forward") window.history.forward();
-      }
+      if (event.source !== window.parent) return;
+      if (!TRUSTED_PARENT_ORIGINS.has(event.origin)) return;
+      if (event.data?.type !== "navigate") return;
+      if (event.data.direction === "back") window.history.back();
+      else if (event.data.direction === "forward") window.history.forward();
     }
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
