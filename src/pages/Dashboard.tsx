@@ -35,9 +35,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
-import { decryptString, encryptString, isVaultError } from "@/lib/crypto";
+import {
+  decryptStringWithinBudget,
+  encryptString,
+  isVaultError,
+  vaultAad,
+} from "@/lib/crypto";
 import { parseCapture, titleFor } from "@/lib/capture";
 import { lockVault, unlockVault, useVaultUnlock } from "@/lib/vault-store";
+import {
+  LOCKED_TITLE_PLACEHOLDER,
+  legacyTitleCount,
+} from "@/lib/vault-record";
+import { clampBody, normaliseTitle } from "@/convex/lib/limits";
 import { cn } from "@/lib/utils";
 import {
   ArrowUp,
@@ -128,19 +138,167 @@ export default function Dashboard() {
   const { theme, setTheme } = useTheme();
   const { passphrase, unlockedAt } = useVaultUnlock();
 
+  // Binds every ciphertext this tab writes to the signed-in account, so a
+  // server that swaps two users' blobs cannot make them decrypt (M8).
+  const aad = user?._id ? vaultAad(user._id) : undefined;
+
   const items = useQuery(api.vault.list) ?? [];
   const createItem = useMutation(api.vault.create);
   const updateItem = useMutation(api.vault.update);
   const removeItem = useMutation(api.vault.remove);
+  const setEncryptedTitle = useMutation(api.vault.setEncryptedTitle);
+  const clearLegacyTitles = useMutation(api.vault.clearLegacyTitles);
 
   /* ------------------------------ vault state ----------------------------- */
 
   const [hasKey, setHasKey] = useState(false);
   const [bodies, setBodies] = useState<Record<string, string>>({});
+
+  /* -------------------------- encrypted metadata ------------------------- */
+  // A title used to be a plaintext column, which made the "zero-knowledge"
+  // claim false: the server could read every entry's headline. Titles now
+  // travel inside the encrypted payload, so a readable title only exists while
+  // the passphrase is in memory. `titles`/`kinds` are the decrypted projection
+  // of the server rows — neither is ever sent back in the clear.
+  const [titles, setTitles] = useState<Record<string, string>>({});
+  const [kinds, setKinds] = useState<Record<string, VaultKind>>({});
+  const [metaReady, setMetaReady] = useState(false);
+  const [metaError, setMetaError] = useState<string | null>(null);
+  const [legacyCount, setLegacyCount] = useState(0);
+  const [migrating, setMigrating] = useState(false);
+  // These caches survive Convex re-deliveries, so PBKDF2 runs once per entry
+  // instead of once per list update.
+  const titleCache = useRef<Record<string, string>>({});
+  const kindCache = useRef<Record<string, VaultKind>>({});
+  const sigCache = useRef<Record<string, string>>({});
+  const migratingRef = useRef(false);
   const [dialog, setDialog] = useState<null | { mode: "set" | "enter" }>(null);
   const pendingRef = useRef<{ capture?: string; reveal?: Id<"vaultItems">; edit?: Doc<"vaultItems"> } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Doc<"vaultItems"> | null>(null);
   const [editItem, setEditItem] = useState<Doc<"vaultItems"> | null>(null);
+
+  /* ----------------------- metadata decrypt + migrate --------------------- */
+
+  /** `kind` + `updatedAt` — cheap fingerprint of what a row currently holds. */
+  const metaSignature = useMemo(
+    () =>
+      items
+        .map((i) => `${i._id}:${i.titleEncrypted ? 1 : 0}:${i.updatedAt}`)
+        .join("|"),
+    [items],
+  );
+
+  useEffect(() => {
+    if (!passphrase) {
+      // Locking must not leave decrypted titles sitting in memory.
+      titleCache.current = {};
+      kindCache.current = {};
+      sigCache.current = {};
+      setTitles({});
+      setKinds({});
+      setMetaReady(false);
+      return;
+    }
+
+    let cancelled = false;
+    setMetaError(null);
+
+    void (async () => {
+      let failure: string | null = null;
+
+      for (const item of items) {
+        const signature = `${item.titleEncrypted ? 1 : 0}:${item.updatedAt}`;
+        if (sigCache.current[item._id] === signature) continue;
+
+        try {
+          if (item.titleEncrypted) {
+            const meta = JSON.parse(
+              await decryptStringWithinBudget(
+                JSON.parse(item.titleEncrypted),
+                passphrase,
+                aad,
+              ),
+            ) as { title?: string; kind?: VaultKind };
+            titleCache.current[item._id] = meta.title ?? "";
+            kindCache.current[item._id] = meta.kind ?? (item.kind as VaultKind);
+          } else {
+            // Legacy row: plaintext title, kind already stored in the clear.
+            titleCache.current[item._id] = item.title ?? "";
+            kindCache.current[item._id] = item.kind as VaultKind;
+          }
+        } catch {
+          failure =
+            failure ??
+            "Some entries couldn't be decrypted with this key. Titles show as locked.";
+          titleCache.current[item._id] = LOCKED_TITLE_PLACEHOLDER;
+          kindCache.current[item._id] = item.kind as VaultKind;
+        }
+        sigCache.current[item._id] = signature;
+      }
+
+      if (cancelled) return;
+      setTitles({ ...titleCache.current });
+      setKinds({ ...kindCache.current });
+      setMetaReady(true);
+      if (failure) setMetaError(failure);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [items, metaSignature, passphrase, aad]);
+
+  // One-time upgrade of rows written before titles were encrypted. The server
+  // cannot read a decrypted title, so the browser does the re-encryption and
+  // the server only guarantees it will never overwrite existing ciphertext.
+  useEffect(() => {
+    if (!passphrase || !metaReady) return;
+    const pending = items.filter(
+      (item) => !item.titleEncrypted && (item.title ?? "").length > 0,
+    );
+    setLegacyCount(legacyTitleCount(items));
+    if (pending.length === 0 || migratingRef.current) return;
+
+    migratingRef.current = true;
+    setMigrating(true);
+
+    void (async () => {
+      let migrated = 0;
+      for (const item of pending) {
+        try {
+          const title = normaliseTitle(item.title ?? "");
+          const blob = JSON.stringify(
+            await encryptString(
+              JSON.stringify({ title, kind: item.kind }),
+              passphrase,
+              aad,
+            ),
+          );
+          await setEncryptedTitle({ id: item._id, titleEncrypted: blob });
+          titleCache.current[item._id] = title;
+          migrated += 1;
+        } catch {
+          // Stop at the first failure: the remaining rows stay plaintext and
+          // the next pass retries, rather than half-migrating silently.
+          break;
+        }
+      }
+
+      if (migrated > 0) {
+        // Sweep any plaintext title that now has a ciphertext replacement.
+        await clearLegacyTitles({}).catch(() => undefined);
+        setTitles({ ...titleCache.current });
+        toast.success(
+          migrated === 1
+            ? "1 entry upgraded to encrypted titles"
+            : `${migrated} entries upgraded to encrypted titles`,
+          { description: "Titles are no longer readable by the server." },
+        );
+      }
+      migratingRef.current = false;
+      setMigrating(false);
+    })();
+  }, [items, metaReady, passphrase, setEncryptedTitle, clearLegacyTitles]);
 
   /* ----------------------------- capture state ---------------------------- */
 
@@ -154,13 +312,15 @@ export default function Dashboard() {
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() => {
+    const kindOf = (i: Doc<"vaultItems">) => kinds[i._id] ?? (i.kind as VaultKind);
+    const titleOf = (i: Doc<"vaultItems">) => titles[i._id] ?? LOCKED_TITLE_PLACEHOLDER;
     let list = items;
     if (kindFilter === "pinned") list = list.filter((i) => i.pinned);
-    else if (kindFilter !== "all") list = list.filter((i) => i.kind === kindFilter);
+    else if (kindFilter !== "all") list = list.filter((i) => kindOf(i) === kindFilter);
     const q = search.trim().toLowerCase();
-    if (q) list = list.filter((i) => i.title.toLowerCase().includes(q));
+    if (q) list = list.filter((i) => titleOf(i).toLowerCase().includes(q));
     return [...list].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || b.createdAt - a.createdAt);
-  }, [items, kindFilter, search]);
+  }, [items, kindFilter, search, titles, kinds]);
 
   const pinnedCount = useMemo(() => items.filter((i) => i.pinned).length, [items]);
 
@@ -328,7 +488,9 @@ export default function Dashboard() {
     async (item: Doc<"vaultItems">, key: string): Promise<string | null> => {
       try {
         const payload = JSON.parse(item.ciphertext);
-        return await decryptString(payload, key);
+        // Budgeted variant: the payload came from the datastore, so its KDF
+        // parameters are validated before any key derivation (H1).
+        return await decryptStringWithinBudget(payload, key, aad);
       } catch (err) {
         if (isVaultError(err)) {
           lockVault();
@@ -342,7 +504,7 @@ export default function Dashboard() {
         return null;
       }
     },
-    [],
+    [aad],
   );
 
   const handleReveal = async (item: Doc<"vaultItems">) => {
@@ -361,7 +523,11 @@ export default function Dashboard() {
       const item = items.find((i) => i._id === pending.reveal);
       if (item) {
         try {
-          const body = await decryptString(JSON.parse(item.ciphertext), key);
+          const body = await decryptStringWithinBudget(
+            JSON.parse(item.ciphertext),
+            key,
+            aad,
+          );
           setBodies((b) => ({ ...b, [item._id]: body }));
         } catch (err) {
           if (isVaultError(err)) return "That key doesn't match this vault.";
@@ -378,7 +544,7 @@ export default function Dashboard() {
     } else if (pending?.edit) {
       const item = pending.edit;
       try {
-        await decryptString(JSON.parse(item.ciphertext), key);
+        await decryptStringWithinBudget(JSON.parse(item.ciphertext), key, aad);
       } catch (err) {
         if (isVaultError(err)) return "That key doesn't match this vault.";
         return "Couldn't decrypt this entry.";
@@ -393,9 +559,16 @@ export default function Dashboard() {
 
   const persistCapture = async (text: string, key: string) => {
     const { kind, body } = parseCapture(text);
-    const payload = await encryptString(body, key);
+    const bounded = clampBody(body);
+    const title = normaliseTitle(titleFor(bounded));
+    // Body and metadata are sealed into two independent envelopes so a list
+    // render never has to decrypt a body.
+    const payload = await encryptString(bounded, key, aad);
+    const metaBlob = JSON.stringify(
+      await encryptString(JSON.stringify({ title, kind }), key, aad),
+    );
     await createItem({
-      title: titleFor(body),
+      titleEncrypted: metaBlob,
       kind,
       ciphertext: JSON.stringify(payload),
     });
@@ -421,9 +594,28 @@ export default function Dashboard() {
 
   const handleEditSave = async (kind: VaultKind, title: string, body: string) => {
     if (!editItem || !passphrase) return;
-    const payload = await encryptString(body, passphrase);
-    await updateItem({ id: editItem._id, kind, title: titleFor(title), ciphertext: JSON.stringify(payload) });
-    setBodies((b) => ({ ...b, [editItem._id]: body }));
+    const bounded = clampBody(body);
+    const cleanTitle = normaliseTitle(title);
+    const payload = await encryptString(bounded, passphrase, aad);
+    const metaBlob = JSON.stringify(
+      await encryptString(
+        JSON.stringify({ title: cleanTitle, kind }),
+        passphrase,
+        aad,
+      ),
+    );
+    await updateItem({
+      id: editItem._id,
+      kind,
+      titleEncrypted: metaBlob,
+      ciphertext: JSON.stringify(payload),
+    });
+    setBodies((b) => ({ ...b, [editItem._id]: bounded }));
+    titleCache.current[editItem._id] = cleanTitle;
+    kindCache.current[editItem._id] = kind;
+    sigCache.current[editItem._id] = `1:${editItem.updatedAt}`;
+    setTitles({ ...titleCache.current });
+    setKinds({ ...kindCache.current });
     setEditItem(null);
     toast.success("Entry updated");
   };
@@ -641,11 +833,26 @@ export default function Dashboard() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search titles"
+              placeholder={vaultLocked ? "Unlock to search" : "Search titles"}
+              disabled={vaultLocked}
               className="h-9 rounded-full bg-card/60 pl-9 text-xs"
             />
           </div>
         </div>
+
+        {/* Metadata state — titles decrypt on unlock and are upgraded on first sight */}
+        {metaError ? (
+          <p className="mt-4 rounded-2xl border border-destructive/40 bg-destructive/8 px-4 py-2.5 text-xs text-destructive">
+            {metaError}
+          </p>
+        ) : null}
+        {migrating ? (
+          <p className="mt-4 rounded-2xl border border-accent-lime/40 bg-accent-lime/8 px-4 py-2.5 text-xs text-muted-foreground">
+            Encrypting {legacyCount} legacy title
+            {legacyCount === 1 ? "" : "s"} — the server will no longer be able
+            to read them.
+          </p>
+        ) : null}
 
         {/* Cards */}
         <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -653,6 +860,8 @@ export default function Dashboard() {
             <VaultCard
               key={item._id}
               item={item}
+              title={titles[item._id] ?? LOCKED_TITLE_PLACEHOLDER}
+              kind={(kinds[item._id] ?? item.kind) as VaultKind}
               body={bodies[item._id] ?? null}
               locked={!(item._id in bodies)}
               onReveal={() => void handleReveal(item)}
@@ -885,7 +1094,7 @@ export default function Dashboard() {
           <AlertDialogHeader className="text-left">
             <AlertDialogTitle className="text-display text-lg">Delete this entry?</AlertDialogTitle>
             <AlertDialogDescription className="text-sm leading-relaxed text-muted-foreground">
-              “{deleteTarget?.title}” will be permanently removed. This can&apos;t be undone.
+              “{deleteTarget ? titles[deleteTarget._id] ?? LOCKED_TITLE_PLACEHOLDER : ""}” will be permanently removed. This can&apos;t be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="mt-6 gap-2">
@@ -900,7 +1109,12 @@ export default function Dashboard() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <EditDialog item={editItem} onClose={() => setEditItem(null)} onSave={handleEditSave} />
+      <EditDialog
+        item={editItem}
+        initialTitle={editItem ? titles[editItem._id] ?? "" : ""}
+        onClose={() => setEditItem(null)}
+        onSave={handleEditSave}
+      />
     </div>
   );
 }
@@ -909,10 +1123,12 @@ export default function Dashboard() {
 
 function EditDialog({
   item,
+  initialTitle,
   onClose,
   onSave,
 }: {
   item: Doc<"vaultItems"> | null;
+  initialTitle: string;
   onClose: () => void;
   onSave: (kind: VaultKind, title: string, body: string) => Promise<void>;
 }) {
@@ -924,11 +1140,13 @@ function EditDialog({
   useEffect(() => {
     if (item) {
       setKind(item.kind as VaultKind);
-      setTitle(item.title);
+      // The title comes from the decrypted projection, never from the row —
+      // the server no longer stores a readable one.
+      setTitle(initialTitle);
       setBody("");
       setBusy(false);
     }
-  }, [item]);
+  }, [item, initialTitle]);
 
   if (!item) return null;
 
