@@ -22,11 +22,27 @@ import { useEffect, useSyncExternalStore } from "react";
  *    again. Polling on a short interval keeps the remaining time honest, and
  *    the `visibilitychange` handler closes the window where the tab was
  *    hidden the whole time.
+ *
+ * ## Why the lock is armed here and not in a page
+ *
+ * `useAutoLock` used to be mounted inside `Dashboard`, which meant the vault
+ * was only ever armed while `/dashboard` was on screen. Navigating to any
+ * other route (or a future one) left the key in memory with no idle timer at
+ * all — the exact gap the feature exists to close. The hook is now mounted
+ * once, app-wide, in `main.tsx`, so every route is covered by construction.
+ * The store also records *why* the vault locked (`autoLockedAt`) so a page can
+ * explain the lock without owning the policy.
  */
 
 interface VaultUnlockState {
   passphrase: string | null;
   unlockedAt: number | null;
+  /**
+   * When the vault locked itself because of inactivity, or `null` when it is
+   * unlocked or was locked deliberately. Lets the UI say "locked automatically
+   * after inactivity" without the page having to run the timer.
+   */
+  autoLockedAt: number | null;
 }
 
 /** Default idle window before the vault locks itself. */
@@ -35,7 +51,11 @@ export const DEFAULT_AUTO_LOCK_MS = 5 * 60 * 1000;
 /** How often the idle check runs. Short enough to be honest, cheap enough to ignore. */
 const AUTO_LOCK_POLL_MS = 1_000;
 
-let state: VaultUnlockState = { passphrase: null, unlockedAt: null };
+let state: VaultUnlockState = {
+  passphrase: null,
+  unlockedAt: null,
+  autoLockedAt: null,
+};
 let lastActivityAt = 0;
 let autoLockMs = DEFAULT_AUTO_LOCK_MS;
 
@@ -79,12 +99,29 @@ export function isIdleExpired(now = Date.now()): boolean {
 
 export function unlockVault(passphrase: string) {
   noteActivity();
-  setState({ passphrase, unlockedAt: Date.now() });
+  setState({ passphrase, unlockedAt: Date.now(), autoLockedAt: null });
 }
 
+/** Lock deliberately (sign-out, manual lock). Not an inactivity lock. */
 export function lockVault() {
   lastActivityAt = 0;
-  setState({ passphrase: null, unlockedAt: null });
+  setState({ passphrase: null, unlockedAt: null, autoLockedAt: null });
+}
+
+/**
+ * Lock because the idle window elapsed.
+ *
+ * Kept distinct from `lockVault` so the UI can tell the user *why* the screen
+ * locked — a silent lock looks like lost work.
+ */
+export function lockVaultIdle(now = Date.now()) {
+  lastActivityAt = 0;
+  setState({ passphrase: null, unlockedAt: null, autoLockedAt: now });
+}
+
+/** True when the last lock was an inactivity lock. */
+export function wasAutoLocked(): boolean {
+  return state.autoLockedAt !== null;
 }
 
 function subscribe(listener: () => void) {
@@ -119,7 +156,9 @@ const ACTIVITY_EVENTS: Array<keyof WindowEventMap> = [
 ];
 
 /**
- * Arm the idle auto-lock. Mount this once, high in the tree.
+ * Arm the idle auto-lock. Mount this ONCE, app-wide (see `main.tsx`), so every
+ * route is covered — mounting it inside a single page leaves the vault
+ * unarmed everywhere else.
  *
  * @param onAutoLock Called when the vault locks itself, so the UI can explain
  *   why the screen just locked instead of appearing to lose the user's work.
@@ -142,7 +181,7 @@ export function useAutoLock(onAutoLock?: () => void) {
     const onVisibility = () => {
       if (document.visibilityState !== "visible") return;
       if (isIdleExpired()) {
-        lockVault();
+        lockVaultIdle();
         onAutoLock?.();
       }
     };
@@ -150,7 +189,7 @@ export function useAutoLock(onAutoLock?: () => void) {
 
     const poll = window.setInterval(() => {
       if (isIdleExpired()) {
-        lockVault();
+        lockVaultIdle();
         onAutoLock?.();
       }
     }, AUTO_LOCK_POLL_MS);
