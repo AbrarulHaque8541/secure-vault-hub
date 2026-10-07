@@ -13,4 +13,14 @@ ext {
     androidxJunitVersion = '1.3.0'
     androidxEspressoCoreVersion = '3.7.0'
     cordovaAndroidVersion = '14.0.1'
+
+    // Production release signing. Values come from the environment (CI secrets); they are
+    // never committed. `hasReleaseSigning` is the single condition behind both the signing
+    // config and the fail-closed task-graph guard in app/build.gradle.
+    releaseStoreFile = System.getenv("RELEASE_STORE_FILE")
+    releaseStorePassword = System.getenv("RELEASE_STORE_PASSWORD")
+    releaseKeyAlias = System.getenv("RELEASE_KEY_ALIAS")
+    releaseKeyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+    hasReleaseSigning = [releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword]
+        .every { it != null && !it.trim().isEmpty() }
 }
