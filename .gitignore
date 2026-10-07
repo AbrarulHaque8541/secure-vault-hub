@@ -5,10 +5,15 @@ node_modules
 dist
 
 # Environment / secrets — never commit
+# `.env.keys` holds the dotenvx PRIVATE key. If git ever reports it as
+# ignored, that is the guard working correctly — never `git add -f` it.
+# Adding `-f` is exactly how the original leak happened.
 .env
 .env.local
 .env.*.local
 .env.keys
+**/.env.keys
+*.pem
 
 # Capacitor / Android build outputs
 android/.gradle
