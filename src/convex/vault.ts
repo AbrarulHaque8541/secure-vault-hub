@@ -5,8 +5,6 @@ import { v } from "convex/values";
 import {
   MAX_CIPHERTEXT_BYTES,
   MAX_ENCRYPTED_TITLE_BYTES,
-  MAX_HINTS,
-  MAX_HINT_CHARS,
   MAX_ITEMS_PER_USER,
   normaliseTitle,
   utf8ByteLength,
@@ -50,10 +48,17 @@ function assertWithinLimit(
   }
 }
 
-/** Bound attacker-controlled free text to a server-owned shape. */
-function sanitiseHints(hints: string[] | undefined): string[] | undefined {
-  if (hints === undefined) return undefined;
-  return hints.slice(0, MAX_HINTS).map((hint) => normaliseTitle(hint, MAX_HINT_CHARS));
+/**
+ * Hints are plaintext metadata and are no longer persisted (M3).
+ *
+ * A hint is a short, human-readable label attached to an entry. Storing it in
+ * the clear on the server defeats the point of the encrypted vault: the server
+ * (and anyone who reads the database) learns the shape of the user's data even
+ * though the body is opaque. The field is still *accepted* so an older client
+ * does not break, but it is dropped rather than written.
+ */
+function dropPlaintextHints(): undefined {
+  return undefined;
 }
 
 export const list = query({
@@ -129,7 +134,7 @@ export const create = mutation({
       titleEncrypted: args.titleEncrypted,
       kind: args.kind,
       ciphertext: args.ciphertext,
-      hints: sanitiseHints(args.hints),
+      hints: dropPlaintextHints(),
       pinned: args.pinned ?? false,
       createdAt: now,
       updatedAt: now,
@@ -175,7 +180,8 @@ export const update = mutation({
     }
     if (args.kind !== undefined) patch.kind = args.kind;
     if (args.ciphertext !== undefined) patch.ciphertext = args.ciphertext;
-    if (args.hints !== undefined) patch.hints = sanitiseHints(args.hints);
+    // Plaintext hints are never written (M3); see dropPlaintextHints.
+    if (args.hints !== undefined) patch.hints = dropPlaintextHints();
     if (args.pinned !== undefined) patch.pinned = args.pinned;
     if (args.pinnedAt !== undefined) patch.pinnedAt = args.pinnedAt;
 

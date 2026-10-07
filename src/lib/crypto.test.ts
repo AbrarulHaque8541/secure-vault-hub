@@ -1,12 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import {
+  clearKeyCache,
   decryptString,
   decryptStringWithinBudget,
   encryptString,
   isVaultError,
+  keyCacheSize,
   MAX_ACCEPTED_ITERATIONS,
   MIN_ACCEPTED_ITERATIONS,
   PBKDF2_ITERATIONS,
+  vaultAad,
   type EncryptedPayload,
 } from "./crypto";
 
@@ -138,5 +141,107 @@ describe("decryptStringWithinBudget", () => {
     await expect(
       decryptStringWithinBudget(payload, "wrong key"),
     ).rejects.toMatchObject({ name: "OperationError" });
+  });
+});
+
+/**
+ * H3: PBKDF2 at 210k iterations costs ~25 ms, and the original code re-derived
+ * the key for every operation. Revealing a 20-card list therefore spent half a
+ * second re-deriving the same key 20 times. The cache is keyed by the full
+ * derivation input, so correctness is unchanged — only the cost.
+ */
+describe("derived-key cache (H3)", () => {
+  test("reuses the key for a repeated (passphrase, salt) pair", async () => {
+    clearKeyCache();
+    const payload = await encryptString("cached", "key");
+    expect(keyCacheSize()).toBe(1);
+    // Decrypting the same payload again must not add a second entry.
+    expect(await decryptString(payload, "key")).toBe("cached");
+    expect(keyCacheSize()).toBe(1);
+  });
+
+  test("a different passphrase gets its own key", async () => {
+    clearKeyCache();
+    const a = await encryptString("a", "key one");
+    const b = await encryptString("b", "key two");
+    expect(await decryptString(a, "key one")).toBe("a");
+    expect(await decryptString(b, "key two")).toBe("b");
+    expect(keyCacheSize()).toBe(2);
+  });
+
+  test("a different salt gets its own key", async () => {
+    clearKeyCache();
+    const a = await encryptString("a", "key");
+    const b = await encryptString("b", "key");
+    expect(a.salt).not.toBe(b.salt);
+    expect(await decryptString(a, "key")).toBe("a");
+    expect(await decryptString(b, "key")).toBe("b");
+    expect(keyCacheSize()).toBe(2);
+  });
+
+  test("a wrong key still fails with a cached key present", async () => {
+    clearKeyCache();
+    const payload = await encryptString("locked", "right key");
+    await expect(decryptString(payload, "wrong key")).rejects.toMatchObject({
+      name: "OperationError",
+    });
+  });
+
+  test("clearKeyCache empties the cache", async () => {
+    await encryptString("x", "key");
+    expect(keyCacheSize()).toBeGreaterThan(0);
+    clearKeyCache();
+    expect(keyCacheSize()).toBe(0);
+  });
+});
+
+/**
+ * M8: without additional authenticated data, a server that swaps two users'
+ * ciphertext blobs is undetectable — both decrypt cleanly under their own
+ * owner's key. Binding the account id into the tag makes the swap fail.
+ */
+describe("account-bound ciphertexts (M8)", () => {
+  const alice = vaultAad("user_alice");
+  const bob = vaultAad("user_bob");
+
+  test("round-trips when the same AAD is supplied", async () => {
+    const payload = await encryptString("alice's secret", "key", alice);
+    expect(payload.v).toBe(2);
+    expect(await decryptString(payload, "key", alice)).toBe("alice's secret");
+  });
+
+  test("refuses to decrypt under a different account's AAD", async () => {
+    const payload = await encryptString("alice's secret", "key", alice);
+    await expect(decryptString(payload, "key", bob)).rejects.toMatchObject({
+      name: "OperationError",
+    });
+  });
+
+  test("refuses a bound payload when no AAD is supplied", async () => {
+    const payload = await encryptString("alice's secret", "key", alice);
+    await expect(decryptString(payload, "key")).rejects.toThrow(/account/);
+  });
+
+  test("legacy v1 payloads still decrypt without an AAD", async () => {
+    const payload = await encryptString("legacy", "key");
+    expect(payload.v).toBe(1);
+    expect(await decryptString(payload, "key")).toBe("legacy");
+    // Supplying an AAD for a v1 payload is ignored, not an error.
+    expect(await decryptString(payload, "key", alice)).toBe("legacy");
+  });
+
+  test("the budgeted path enforces the same binding", async () => {
+    const payload = await encryptString("bound", "key", alice);
+    expect(await decryptStringWithinBudget(payload, "key", alice)).toBe("bound");
+    await expect(
+      decryptStringWithinBudget(payload, "key", bob),
+    ).rejects.toMatchObject({ name: "OperationError" });
+  });
+
+  test("refuses an unknown envelope version", async () => {
+    const payload = await encryptString("x", "key");
+    await expect(
+      decryptStringWithinBudget({ ...payload, v: 3 as never }, "key"),
+    ).rejects.toThrow(/version/);
   });
 });
