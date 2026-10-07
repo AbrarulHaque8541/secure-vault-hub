@@ -4,10 +4,12 @@ import {
   getVaultState,
   isIdleExpired,
   lockVault,
+  lockVaultIdle,
   noteActivity,
   setAutoLockMs,
   subscribeToVault,
   unlockVault,
+  wasAutoLocked,
 } from "./vault-store";
 
 describe("vault unlock store", () => {
@@ -135,5 +137,48 @@ describe("idle auto-lock policy", () => {
 
   test("the lock window is just long enough to be useful and short enough to matter", () => {
     expect(getAutoLockMs()).toBe(5 * 60 * 1000);
+  });
+});
+
+/**
+ * The lock reason is what lets the UI say "locked automatically after
+ * inactivity" instead of appearing to lose the user's work. It also proves the
+ * idle path is distinct from a deliberate lock.
+ */
+describe("auto-lock reason", () => {
+  beforeEach(() => {
+    lockVault();
+    setAutoLockMs(5 * 60 * 1000);
+  });
+
+  test("a deliberate lock is not reported as an auto-lock", () => {
+    unlockVault("key");
+    lockVault();
+    expect(wasAutoLocked()).toBe(false);
+    expect(getVaultState().autoLockedAt).toBeNull();
+  });
+
+  test("an idle lock records when it happened", () => {
+    unlockVault("key");
+    lockVaultIdle(12_345);
+    expect(wasAutoLocked()).toBe(true);
+    expect(getVaultState().autoLockedAt).toBe(12_345);
+    expect(getVaultState().passphrase).toBeNull();
+  });
+
+  test("unlocking clears a previous auto-lock reason", () => {
+    unlockVault("key");
+    lockVaultIdle(1);
+    unlockVault("key");
+    expect(wasAutoLocked()).toBe(false);
+  });
+
+  test("an idle lock clears the activity clock so it cannot re-fire", () => {
+    setAutoLockMs(1_000);
+    unlockVault("key");
+    noteActivity(10_000);
+    lockVaultIdle(11_000);
+    // Nothing left to lock, so the predicate must stay quiet afterwards.
+    expect(isIdleExpired(999_999)).toBe(false);
   });
 });

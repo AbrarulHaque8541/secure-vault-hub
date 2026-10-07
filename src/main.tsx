@@ -9,6 +9,8 @@ import React, { StrictMode, useEffect, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router";
 import { parseAllowedOrigins, readNavigationDirection, resolvePostTargetOrigin } from "./lib/embed";
+import { getAutoLockMs, useAutoLock } from "./lib/vault-store";
+import { toast } from "sonner";
 import "./index.css";
 
 // Lazy load route components for better code splitting
@@ -133,6 +135,24 @@ function RouteSyncer() {
   return null;
 }
 
+/**
+ * App-wide idle auto-lock.
+ *
+ * Mounted once, inside the router, so the vault is armed on EVERY route — not
+ * only `/dashboard`. Previously the hook lived inside `Dashboard`, so any other
+ * route left the in-memory key with no idle timer at all. The lock policy
+ * itself lives in `src/lib/vault-store.ts`; this component only surfaces the
+ * "why did it lock" toast.
+ */
+function VaultAutoLock() {
+  useAutoLock(() => {
+    toast("Vault locked", {
+      description: `No activity for ${Math.round(getAutoLockMs() / 60_000)} minutes — your key was cleared from memory.`,
+    });
+  });
+  return null;
+}
+
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -144,6 +164,7 @@ createRoot(document.getElementById("root")!).render(
         <ConvexAuthProvider client={convex}>
         <BrowserRouter>
           <RouteSyncer />
+          <VaultAutoLock />
           <Suspense fallback={<RouteLoading />}>
             <Routes>
               <Route path="/" element={<Landing />} />
