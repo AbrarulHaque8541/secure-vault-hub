@@ -8,6 +8,7 @@ import { ThemeProvider } from "./components/theme-provider";
 import React, { StrictMode, useEffect, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router";
+import { parseAllowedOrigins, readNavigationDirection, resolvePostTargetOrigin } from "./lib/embed";
 import "./index.css";
 
 // Lazy load route components for better code splitting
@@ -83,33 +84,47 @@ class RootErrorBoundary extends React.Component<
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
+/**
+ * Origins permitted to frame this app and drive its router.
+ *
+ * Empty by default, and an empty allowlist denies every inbound navigation
+ * rather than trusting all of them — a missing build variable must fail
+ * closed.
+ */
+const ALLOWED_EMBED_ORIGINS = parseAllowedOrigins(
+  import.meta.env.VITE_ALLOWED_EMBED_ORIGINS as string | undefined,
+);
 
 
-// Only accept navigation control from our own parent frame on a trusted
-// origin. Blocks arbitrary cross-origin pages from driving history via
-// postMessage (previously any origin could send {type:"navigate"}).
-const TRUSTED_PARENT_ORIGINS = new Set<string>([
-  window.location.origin,
-  "https://freebuff.com",
-  "https://integrations.freebuff.com",
-]);
 
 function RouteSyncer() {
   const location = useLocation();
   useEffect(() => {
+    // The payload is a pathname and nothing else, so the wildcard fallback in
+    // `resolvePostTargetOrigin` cannot disclose vault content. See src/lib/embed.ts.
     window.parent.postMessage(
       { type: "iframe-route-change", path: location.pathname },
-      "*",
+      resolvePostTargetOrigin(ALLOWED_EMBED_ORIGINS, document.referrer),
     );
   }, [location.pathname]);
 
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
-      if (event.source !== window.parent) return;
-      if (!TRUSTED_PARENT_ORIGINS.has(event.origin)) return;
-      if (event.data?.type !== "navigate") return;
-      if (event.data.direction === "back") window.history.back();
-      else if (event.data.direction === "forward") window.history.forward();
+      // Origin and sender are both checked before the payload is read. The
+      // previous version trusted every message that merely carried
+      // `type: "navigate"`, so any frame that could reach this window could
+      // drive the router.
+      const direction = readNavigationDirection(
+        {
+          origin: event.origin,
+          isFromParent: event.source === window.parent,
+          data: event.data,
+        },
+        ALLOWED_EMBED_ORIGINS,
+      );
+
+      if (direction === "back") window.history.back();
+      else if (direction === "forward") window.history.forward();
     }
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);

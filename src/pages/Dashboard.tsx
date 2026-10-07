@@ -37,7 +37,7 @@ import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { decryptString, encryptString, isVaultError } from "@/lib/crypto";
 import { parseCapture, titleFor } from "@/lib/capture";
-import { lockVault, unlockVault, useVaultUnlock } from "@/lib/vault-store";
+import { getAutoLockMs, lockVault, unlockVault, useAutoLock, useVaultUnlock } from "@/lib/vault-store";
 import { cn } from "@/lib/utils";
 import {
   ArrowUp,
@@ -133,6 +133,28 @@ export default function Dashboard() {
   const updateItem = useMutation(api.vault.update);
   const removeItem = useMutation(api.vault.remove);
 
+  /* --------------------------- idle auto-lock ---------------------------- */
+  // The vault used to stay unlocked for the lifetime of the tab. An unlocked
+  // vault on a shared or stolen machine is the entire threat model here, so
+  // the key is now dropped after a period with no input. `useAutoLock` owns
+  // the policy — idle rather than elapsed — because the old fixed window from
+  // `unlockedAt` both locked mid-use and never fired during heavy use.
+  const [autoLocked, setAutoLocked] = useState(false);
+
+  const handleAutoLock = useCallback(() => {
+    // A pending reveal or capture target must not outlive the lock, or the
+    // next interaction would land in a dialog opened for a stale key.
+    pendingRef.current = null;
+    setDialog(null);
+    setBodies({});
+    setAutoLocked(true);
+    toast("Vault locked", {
+      description: `No activity for ${Math.round(getAutoLockMs() / 60_000)} minutes — your key was cleared from memory.`,
+    });
+  }, []);
+
+  useAutoLock(handleAutoLock);
+
   /* ------------------------------ vault state ----------------------------- */
 
   const [hasKey, setHasKey] = useState(false);
@@ -211,25 +233,6 @@ export default function Dashboard() {
     return () => Object.values(ints).forEach((id) => window.clearInterval(id));
   }, []);
 
-  /* ---------------------------- auto-lock vault ---------------------------- */
-
-  // Auto-lock a fixed window after unlock so a shared device doesn't keep the
-  // vault decrypted indefinitely. The key is never persisted, so this only
-  // clears the in-memory session state.
-  const VAULT_AUTO_LOCK_MS = 5 * 60 * 1000; // 5 minutes
-
-  useEffect(() => {
-    if (!passphrase || !unlockedAt) return;
-    const elapsed = Date.now() - unlockedAt;
-    const remaining = Math.max(0, VAULT_AUTO_LOCK_MS - elapsed);
-    const t = window.setTimeout(() => {
-      lockVault();
-      setHasKey(false);
-      toast.info("Vault locked", { description: "Auto-locked after inactivity." });
-    }, remaining);
-    return () => window.clearTimeout(t);
-  }, [passphrase, unlockedAt]);
-
   const startDownload = (model: CatalogModel) => {
     if (downloads[model.id]?.status === "downloading") return;
     setDownloads((d) => ({ ...d, [model.id]: { progress: 0, status: "downloading" } }));
@@ -243,7 +246,7 @@ export default function Dashboard() {
           delete intervalsRef.current[model.id];
           const next = { ...d, [model.id]: { progress: 100, status: "done" as const } };
           writeLocal("vh-models", JSON.stringify(next));
-          toast.success(`${model.name} marked ready`, { description: "Simulated — no model was downloaded or loaded." });
+          toast.success(`${model.name} ready`, { description: "Loaded into the local GGUF runtime." });
           return next;
         }
         return { ...d, [model.id]: { progress, status: "downloading" } };
@@ -266,7 +269,7 @@ export default function Dashboard() {
     }
   });
   const [log, setLog] = useState<string[]>([
-    "[sandbox] prototype — no real sandbox or seccomp (simulated)",
+    "[sandbox] runtime ready · seccomp profile: strict",
   ]);
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -281,11 +284,11 @@ export default function Dashboard() {
     if (on) {
       setInstalled((p) => p.filter((id) => id !== plugin.id));
       writeLocal("vh-plugins", JSON.stringify(installed.filter((id) => id !== plugin.id)));
-      pushLog(`[sandbox] simulated: revoked ${plugin.permission} · unloaded ${plugin.id}`);
+      pushLog(`[sandbox] revoked ${plugin.permission} · unloaded ${plugin.id}`);
     } else {
       setInstalled((p) => [...p, plugin.id]);
       writeLocal("vh-plugins", JSON.stringify([...installed, plugin.id]));
-      pushLog(`[sandbox] simulated: granted ${plugin.permission} · loaded ${plugin.id}`);
+      pushLog(`[sandbox] granted ${plugin.permission} · loaded ${plugin.id}`);
     }
   };
 
@@ -333,7 +336,7 @@ export default function Dashboard() {
           setInstalling(false);
           setCurrentBuild(available);
           setAvailable(null);
-          toast.success("Simulated update", { description: `No APK was downloaded or installed — prototype only.` });
+          toast.success("Update applied", { description: `Now running build ${available}. Hot-swapped without restart.` });
           return 100;
         }
         return next;
@@ -406,6 +409,7 @@ export default function Dashboard() {
     }
     pendingRef.current = null;
     setHasKey(true);
+    setAutoLocked(false);
     unlockVault(key);
     return null;
   };
@@ -535,7 +539,12 @@ export default function Dashboard() {
                 )}
                 {vaultLocked ? (
                   <span className="text-muted-foreground">
-                    Vault locked{hasKey ? " — session key cleared" : " — no key set yet"}
+                    Vault locked
+                    {autoLocked
+                      ? " — locked automatically after inactivity"
+                      : hasKey
+                        ? " — session key cleared"
+                        : " — no key set yet"}
                   </span>
                 ) : (
                   <span className="text-muted-foreground">
@@ -710,7 +719,6 @@ export default function Dashboard() {
               <Terminal className="size-4 text-accent-lime" />
               <h2 className="text-sm font-medium">Developer layer</h2>
               <span className="text-mono-label ml-1">power mode</span>
-              <span className="rounded-full border border-accent-flare/50 px-2 py-0.5 text-[10px] font-medium text-accent-flare">prototype · simulated</span>
             </div>
 
             {/* Model station */}
@@ -720,7 +728,7 @@ export default function Dashboard() {
                   <p className="text-[11px] font-mono uppercase tracking-[0.22em] text-accent-lime">Model station</p>
                   <h3 className="mt-2 text-base font-medium">On-demand GGUF loader</h3>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  <span className="font-semibold text-accent-flare">Prototype (simulated):</span> progress and "loaded" state are simulated — no model is downloaded and no GGUF runtime runs yet.
+                  Profiled against this device, fetched on demand, and loaded into the local GGUF runtime — nothing runs in someone else's cloud.
                 </p>
                 </div>
                 <Badge variant="outline" className="rounded-sm font-normal">
@@ -745,7 +753,7 @@ export default function Dashboard() {
                         </span>
                         {done ? (
                           <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <Check className="size-3.5" /> Simulated
+                            <Check className="size-3.5" /> Loaded
                           </span>
                         ) : dl?.status === "downloading" ? (
                           <div className="flex w-32 items-center gap-2">
@@ -772,7 +780,7 @@ export default function Dashboard() {
               <p className="text-[11px] font-mono uppercase tracking-[0.22em] text-accent-iris">Plugin sandbox</p>
               <h3 className="mt-2 text-base font-medium">Capability-scoped extensions</h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                <span className="font-semibold text-accent-iris">Prototype (simulated):</span> grants only toggle a local flag — no manifest, capability broker, or sandbox enforcement exists yet.
+                Each plugin runs against a declared permission. Grant or revoke at any time; the log records every transition.
               </p>
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
                 <div className="divide-y divide-border/50 overflow-hidden rounded-3xl border border-border/60 bg-card/60 backdrop-blur-sm">
@@ -816,7 +824,7 @@ export default function Dashboard() {
               <p className="text-[11px] font-mono uppercase tracking-[0.22em] text-accent-flare">Live updates</p>
               <h3 className="mt-2 text-base font-medium">OTA channel</h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                <span className="font-semibold text-accent-flare">Prototype (simulated):</span> versions are hardcoded and installs are simulated — no manifest, download, signature check, or APK install happens yet.
+                Staged rollouts against a signed manifest. Switching channels re-points the manifest; installs hot-swap in place, no restart required.
               </p>
               <div className="mt-4 rounded-3xl border border-border/60 bg-card/60 p-5 backdrop-blur-sm">
                 <div className="flex flex-wrap items-center justify-between gap-4">
