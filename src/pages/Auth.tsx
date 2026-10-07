@@ -7,6 +7,8 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp";
 import { useAuth } from "@/hooks/use-auth";
+import { api } from "@/convex/_generated/api";
+import { useMutation } from "convex/react";
 import { ArrowRight, Loader2, Lock, Mail, ShieldCheck, UserX } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
@@ -28,6 +30,12 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   const [searchParams] = useSearchParams();
   const redirect = resolveRedirectAfterAuth(searchParams.get("returnTo"), redirectAfterAuth);
 
+  // Server-side rate limit for code requests. The OTP is 6 digits and valid
+  // for 15 minutes, so bounding attempts is what closes the guessing window.
+  // The check runs on the server (see src/convex/otp.ts) — this call is the
+  // app's path to it, not the control itself.
+  const requestCode = useMutation(api.otp.requestCode);
+
   const [step, setStep] = useState<"signIn" | { email: string }>("signIn");
   const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -45,8 +53,12 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     setError(null);
     try {
       const formData = new FormData(event.currentTarget);
+      const email = String(formData.get("email") ?? "");
+      // Ask the server whether this identifier may request another code
+      // BEFORE the provider is asked to send one.
+      await requestCode({ identifier: email });
       await signIn("email-otp", formData);
-      setStep({ email: formData.get("email") as string });
+      setStep({ email });
     } catch (err) {
       console.error("Email sign-in error:", err);
       setError(

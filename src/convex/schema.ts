@@ -56,6 +56,16 @@ const schema = defineSchema(
       .index("by_user", ["userId"])
       .index("by_user_created", ["userId", "createdAt"])
       .index("by_user_pinned", ["userId", "pinnedAt"]),
+
+    // One row per identifier that has requested an email OTP, holding the
+    // timestamps of recent requests. The OTP is 6 digits and valid for 15
+    // minutes, so bounding attempts is the control that actually closes the
+    // guessing window (see src/convex/lib/otpRateLimit.ts).
+    otpRateLimits: defineTable({
+      identifier: v.string(), // normalised (trimmed + lowercased)
+      attempts: v.array(v.number()), // ms timestamps, pruned to the longest window
+      updatedAt: v.number(),
+    }).index("by_identifier", ["identifier"]),
   },
   {
     schemaValidation: false,
