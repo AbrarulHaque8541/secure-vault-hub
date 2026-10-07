@@ -16,6 +16,12 @@ export const emailOtp = Email({
     return generateRandomString(random, alphabet, 6);
   },
   async sendVerificationRequest({ identifier: email, token }) {
+    // API key is injected via a Convex environment secret — never hardcode
+    // credentials in source. Set it with: npx convex env set FREEBUFF_EMAIL_API_KEY
+    const apiKey = process.env.FREEBUFF_EMAIL_API_KEY;
+    if (!apiKey) {
+      throw new Error("FREEBUFF_EMAIL_API_KEY is not configured");
+    }
     try {
       await axios.post(
         "https://auth.freebuff.app/send_otp",
@@ -26,12 +32,13 @@ export const emailOtp = Email({
         },
         {
           headers: {
-            "x-api-key": "fb_email_2crN1hqIArZP2bEfvjp5Qik4",
+            "x-api-key": apiKey,
           },
         },
       );
-    } catch (error) {
-      throw new Error(JSON.stringify(error));
+    } catch {
+      // Never leak request internals (URL, headers, config) into errors/logs.
+      throw new Error("Failed to send verification code. Please try again.");
     }
   },
 });

@@ -27,7 +27,8 @@ High-value targets in this codebase:
 - `src/lib/crypto.ts` — AES-256-GCM envelope encryption, key derivation
 - `src/lib/vault-store.ts` — in-memory session key handling
 - `src/convex/vault.ts` — authorization scoping on every handler
-- `android/` — WebView settings, mixed content, debugging flags
+- `android/` — WebView settings, mixed content, debugging flags,
+  `android:allowBackup` and the backup rule files in `res/xml/`
 
 ## Design notes for reviewers
 
@@ -40,3 +41,31 @@ High-value targets in this codebase:
   document ownership before mutating.
 - Lost passphrase ⇒ unrecoverable ciphertext. This is stated in the product
   UI and is a feature, not a bug.
+
+## Platform data protection (Android)
+
+- `android:allowBackup="false"`, plus explicit excludes in
+  `res/xml/data_extraction_rules.xml` (API 31+) and
+  `res/xml/full_backup_content.xml` (API ≤ 30).
+- The app's own ciphertext is useless to a backup, but the WebView profile is
+  not: cookies and session tokens live there in the clear, and Android ≤ 11
+  sends automatic backups to Google Drive unless told otherwise.
+- Backups are disabled outright rather than filtered, because nothing the app
+  stores is worth restoring onto another device — a lost passphrase already
+  makes the ciphertext unrecoverable either way.
+
+### Known issue: debug APK committed to the repository
+
+`apks/SecureVaultHub-v1.0.0-debug.apk` was committed to this public
+repository. A debug build of a Capacitor app enables WebView remote debugging,
+and an APK's contents are trivially extractable, so it should be treated as an
+information-disclosure artefact rather than a convenience download.
+
+This change untracks it and adds `apks/*.apk` to `.gitignore`. Do not
+re-commit it — release artefacts belong in GitHub Releases, produced by a
+signed CI job. It also remains reachable in git history.
+
+Rotation status for the two credentials committed in the same repository
+(`.env.keys` and the email-OTP provider key) is tracked in
+[docs/SECRET-ROTATION.md](docs/SECRET-ROTATION.md). Untracking is not
+remediation: both keys must be rotated, and the objects purged from history.
