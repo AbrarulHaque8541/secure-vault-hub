@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
   decryptString,
+  decryptStringWithinBudget,
   encryptString,
   isVaultError,
+  MAX_ACCEPTED_ITERATIONS,
+  MIN_ACCEPTED_ITERATIONS,
   PBKDF2_ITERATIONS,
   type EncryptedPayload,
 } from "./crypto";
@@ -63,5 +66,77 @@ describe("encryptString / decryptString", () => {
     await expect(decryptString(tampered, "key")).rejects.toMatchObject({
       name: "OperationError",
     });
+  });
+});
+
+describe("decryptStringWithinBudget", () => {
+  test("decrypts a freshly produced payload", async () => {
+    const payload = await encryptString("bounded", "key");
+    expect(await decryptStringWithinBudget(payload, "key")).toBe("bounded");
+  });
+
+  test("lets in-band iteration counts through to the decrypt step", async () => {
+    // The guard's job is to refuse *out-of-band* parameters before any key
+    // derivation. An in-band value therefore must fail on the AEAD (wrong key
+    // for that count), not on the iteration guard — which is exactly how we
+    // can prove the boundary is where it claims to be.
+    const payload = await encryptString("edges", "key");
+    for (const iterations of [MIN_ACCEPTED_ITERATIONS, MAX_ACCEPTED_ITERATIONS]) {
+      await expect(
+        decryptStringWithinBudget({ ...payload, iterations }, "key"),
+      ).rejects.toMatchObject({ name: "OperationError" });
+    }
+  });
+
+  test("refuses an absurd iteration count instead of grinding", async () => {
+    const payload = await encryptString("x", "key");
+    await expect(
+      decryptStringWithinBudget({ ...payload, iterations: 4_000_000_000 }, "key"),
+    ).rejects.toThrow(/iterations/);
+  });
+
+  test("refuses an iteration count below the floor", async () => {
+    const payload = await encryptString("x", "key");
+    await expect(
+      decryptStringWithinBudget({ ...payload, iterations: 1 }, "key"),
+    ).rejects.toThrow(/iterations/);
+  });
+
+  test("refuses a non-integer iteration count", async () => {
+    const payload = await encryptString("x", "key");
+    await expect(
+      decryptStringWithinBudget({ ...payload, iterations: 210_000.5 }, "key"),
+    ).rejects.toThrow(/iterations/);
+  });
+
+  test("refuses an unsupported key derivation function", async () => {
+    const payload = await encryptString("x", "key");
+    await expect(
+      decryptStringWithinBudget({ ...payload, kdf: "ROT13" as never }, "key"),
+    ).rejects.toThrow(/Unsupported/);
+  });
+
+  test("refuses a malformed payload", async () => {
+    await expect(
+      decryptStringWithinBudget(null as never, "key"),
+    ).rejects.toThrow(/Malformed/);
+    const payload = await encryptString("x", "key");
+    await expect(
+      decryptStringWithinBudget({ ...payload, salt: "" }, "key"),
+    ).rejects.toThrow(/Malformed/);
+  });
+
+  test("refuses a ciphertext shorter than the GCM tag", async () => {
+    const payload = await encryptString("x", "key");
+    await expect(
+      decryptStringWithinBudget({ ...payload, ct: "AAAA" }, "key"),
+    ).rejects.toThrow(/implausible/);
+  });
+
+  test("still reports a wrong key as OperationError", async () => {
+    const payload = await encryptString("locked", "right key");
+    await expect(
+      decryptStringWithinBudget(payload, "wrong key"),
+    ).rejects.toMatchObject({ name: "OperationError" });
   });
 });
