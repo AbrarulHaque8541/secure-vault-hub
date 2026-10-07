@@ -36,6 +36,11 @@ High-value targets in this codebase:
   session only.
 - The server stores `vaultItems.ciphertext` as an opaque string and has no
   code path that can decrypt it. There is deliberately no key escrow.
+- **Known metadata exposure:** `vaultItems.title` and `vaultItems.hints` are
+  stored as plaintext on the server — only the encrypted body lives as opaque
+  ciphertext. A server operator can read titles/hints. For true zero-knowledge
+  metadata, titles/hints must also be encrypted on-device; that is a planned
+  hardening item.
 - All Convex handlers resolve the caller with `getAuthUserId(ctx)` and verify
   document ownership before mutating.
 - Lost passphrase ⇒ unrecoverable ciphertext. This is stated in the product

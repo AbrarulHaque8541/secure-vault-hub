@@ -37,7 +37,7 @@ import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { decryptString, encryptString, isVaultError } from "@/lib/crypto";
 import { parseCapture, titleFor } from "@/lib/capture";
-import { lockVault, unlockVault, useVaultUnlock } from "@/lib/vault-store";
+import { getAutoLockMs, lockVault, unlockVault, useAutoLock, useVaultUnlock } from "@/lib/vault-store";
 import { cn } from "@/lib/utils";
 import {
   ArrowUp,
@@ -132,6 +132,28 @@ export default function Dashboard() {
   const createItem = useMutation(api.vault.create);
   const updateItem = useMutation(api.vault.update);
   const removeItem = useMutation(api.vault.remove);
+
+  /* --------------------------- idle auto-lock ---------------------------- */
+  // The vault used to stay unlocked for the lifetime of the tab. An unlocked
+  // vault on a shared or stolen machine is the entire threat model here, so
+  // the key is now dropped after a period with no input. `useAutoLock` owns
+  // the policy — idle rather than elapsed — because the old fixed window from
+  // `unlockedAt` both locked mid-use and never fired during heavy use.
+  const [autoLocked, setAutoLocked] = useState(false);
+
+  const handleAutoLock = useCallback(() => {
+    // A pending reveal or capture target must not outlive the lock, or the
+    // next interaction would land in a dialog opened for a stale key.
+    pendingRef.current = null;
+    setDialog(null);
+    setBodies({});
+    setAutoLocked(true);
+    toast("Vault locked", {
+      description: `No activity for ${Math.round(getAutoLockMs() / 60_000)} minutes — your key was cleared from memory.`,
+    });
+  }, []);
+
+  useAutoLock(handleAutoLock);
 
   /* ------------------------------ vault state ----------------------------- */
 
@@ -387,6 +409,7 @@ export default function Dashboard() {
     }
     pendingRef.current = null;
     setHasKey(true);
+    setAutoLocked(false);
     unlockVault(key);
     return null;
   };
@@ -516,7 +539,12 @@ export default function Dashboard() {
                 )}
                 {vaultLocked ? (
                   <span className="text-muted-foreground">
-                    Vault locked{hasKey ? " — session key cleared" : " — no key set yet"}
+                    Vault locked
+                    {autoLocked
+                      ? " — locked automatically after inactivity"
+                      : hasKey
+                        ? " — session key cleared"
+                        : " — no key set yet"}
                   </span>
                 ) : (
                   <span className="text-muted-foreground">
