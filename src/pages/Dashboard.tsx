@@ -36,10 +36,10 @@ import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import {
-  decryptString,
   decryptStringWithinBudget,
   encryptString,
   isVaultError,
+  vaultAad,
 } from "@/lib/crypto";
 import { parseCapture, titleFor } from "@/lib/capture";
 import { lockVault, unlockVault, useVaultUnlock } from "@/lib/vault-store";
@@ -138,6 +138,10 @@ export default function Dashboard() {
   const { theme, setTheme } = useTheme();
   const { passphrase, unlockedAt } = useVaultUnlock();
 
+  // Binds every ciphertext this tab writes to the signed-in account, so a
+  // server that swaps two users' blobs cannot make them decrypt (M8).
+  const aad = user?._id ? vaultAad(user._id) : undefined;
+
   const items = useQuery(api.vault.list) ?? [];
   const createItem = useMutation(api.vault.create);
   const updateItem = useMutation(api.vault.update);
@@ -212,6 +216,7 @@ export default function Dashboard() {
               await decryptStringWithinBudget(
                 JSON.parse(item.titleEncrypted),
                 passphrase,
+                aad,
               ),
             ) as { title?: string; kind?: VaultKind };
             titleCache.current[item._id] = meta.title ?? "";
@@ -241,7 +246,7 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [items, metaSignature, passphrase]);
+  }, [items, metaSignature, passphrase, aad]);
 
   // One-time upgrade of rows written before titles were encrypted. The server
   // cannot read a decrypted title, so the browser does the re-encryption and
@@ -266,6 +271,7 @@ export default function Dashboard() {
             await encryptString(
               JSON.stringify({ title, kind: item.kind }),
               passphrase,
+              aad,
             ),
           );
           await setEncryptedTitle({ id: item._id, titleEncrypted: blob });
@@ -482,7 +488,9 @@ export default function Dashboard() {
     async (item: Doc<"vaultItems">, key: string): Promise<string | null> => {
       try {
         const payload = JSON.parse(item.ciphertext);
-        return await decryptString(payload, key);
+        // Budgeted variant: the payload came from the datastore, so its KDF
+        // parameters are validated before any key derivation (H1).
+        return await decryptStringWithinBudget(payload, key, aad);
       } catch (err) {
         if (isVaultError(err)) {
           lockVault();
@@ -496,7 +504,7 @@ export default function Dashboard() {
         return null;
       }
     },
-    [],
+    [aad],
   );
 
   const handleReveal = async (item: Doc<"vaultItems">) => {
@@ -515,7 +523,11 @@ export default function Dashboard() {
       const item = items.find((i) => i._id === pending.reveal);
       if (item) {
         try {
-          const body = await decryptString(JSON.parse(item.ciphertext), key);
+          const body = await decryptStringWithinBudget(
+            JSON.parse(item.ciphertext),
+            key,
+            aad,
+          );
           setBodies((b) => ({ ...b, [item._id]: body }));
         } catch (err) {
           if (isVaultError(err)) return "That key doesn't match this vault.";
@@ -532,7 +544,7 @@ export default function Dashboard() {
     } else if (pending?.edit) {
       const item = pending.edit;
       try {
-        await decryptString(JSON.parse(item.ciphertext), key);
+        await decryptStringWithinBudget(JSON.parse(item.ciphertext), key, aad);
       } catch (err) {
         if (isVaultError(err)) return "That key doesn't match this vault.";
         return "Couldn't decrypt this entry.";
@@ -551,9 +563,9 @@ export default function Dashboard() {
     const title = normaliseTitle(titleFor(bounded));
     // Body and metadata are sealed into two independent envelopes so a list
     // render never has to decrypt a body.
-    const payload = await encryptString(bounded, key);
+    const payload = await encryptString(bounded, key, aad);
     const metaBlob = JSON.stringify(
-      await encryptString(JSON.stringify({ title, kind }), key),
+      await encryptString(JSON.stringify({ title, kind }), key, aad),
     );
     await createItem({
       titleEncrypted: metaBlob,
@@ -584,11 +596,12 @@ export default function Dashboard() {
     if (!editItem || !passphrase) return;
     const bounded = clampBody(body);
     const cleanTitle = normaliseTitle(title);
-    const payload = await encryptString(bounded, passphrase);
+    const payload = await encryptString(bounded, passphrase, aad);
     const metaBlob = JSON.stringify(
       await encryptString(
         JSON.stringify({ title: cleanTitle, kind }),
         passphrase,
+        aad,
       ),
     );
     await updateItem({
