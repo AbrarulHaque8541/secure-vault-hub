@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cloud backup and device-to-device transfer rules.
+
+  Android 12+ (API 31) reads this file. The vault's own data is useless to a
+  backup anyway — bodies are AES-256-GCM ciphertext whose passphrase never
+  leaves the user's head — but the WebView/profile directories can hold
+  cookies, session tokens and locally cached plaintext that a backup would
+  copy off the device. Nothing here is worth restoring onto another device, so
+  nothing is allowed out.
+
+  `disableIfNoEncryptionCapabilities="true"` is the belt to this braces: even
+  the excludes below are only honoured for a lock-screen-protected,
+  encrypted backup.
+-->
+<data-extraction-rules>
+    <cloud-backup disableIfNoEncryptionCapabilities="true">
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

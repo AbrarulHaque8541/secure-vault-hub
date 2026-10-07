@@ -1,9 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+      allowBackup="false" — this is a local-first vault. Android's automatic
+      backup would copy the WebView profile (cookies, session tokens) and any
+      locally cached plaintext off the device, and on Android 11 and below it
+      does so to Google Drive by default. Nothing here is meaningfully worth
+      restoring onto a second device, so the trade is clearly in favour of
+      disabling it.
+
+      The two rule files below also exclude every domain explicitly, so a later
+      change that re-enables allowBackup still cannot exfiltrate app data.
+    -->
     <application
         android:allowBackup="false"
-        android:fullBackupContent="false"
+        android:fullBackupContent="@xml/full_backup_content"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
