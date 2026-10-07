@@ -38,7 +38,27 @@ const schema = defineSchema(
     // ciphertext produced on-device with AES-256-GCM (see src/lib/crypto.ts).
     vaultItems: defineTable({
       userId: v.id("users"),
-      title: v.string(),
+
+      /**
+       * LEGACY plaintext title.
+       *
+       * @deprecated Titles are now stored in `titleEncrypted` so the server
+       * cannot read them. This field is kept optional (not removed) because
+       * existing deployments still hold documents that use it — removing it
+       * outright would fail validation and block the deploy. Rows created
+       * before the upgrade are migrated by the client's one-time fix-up, and
+       * this field can be dropped in a follow-up release (expand-and-contract).
+       * See docs/METADATA-MIGRATION.md.
+       */
+      title: v.optional(v.string()),
+
+      /**
+       * AES-256-GCM blob (JSON `EncryptedPayload`, base64) holding the real
+       * title. Optional so documents written before this field existed still
+       * validate while the migration is in flight.
+       */
+      titleEncrypted: v.optional(v.string()),
+
       kind: v.union(
         v.literal("note"),
         v.literal("link"),
@@ -58,7 +78,14 @@ const schema = defineSchema(
       .index("by_user_pinned", ["userId", "pinnedAt"]),
   },
   {
-    schemaValidation: false,
+    // Documents are validated against this schema at the database layer.
+    //
+    // It was disabled to let early development write whatever it liked. That
+    // also meant a malformed document — a missing field, a wrong type — was
+    // accepted silently and only surfaced as a render crash much later. Every
+    // optional field above exists so existing rows validate: enable this only
+    // after confirming no stored document contradicts the schema.
+    schemaValidation: true,
   },
 );
 

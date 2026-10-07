@@ -26,6 +26,8 @@ export const KINDS = Object.keys(KIND_META) as VaultKind[];
 
 export function VaultCard({
   item,
+  title,
+  kind,
   body,
   locked,
   onReveal,
@@ -35,6 +37,10 @@ export function VaultCard({
   busy,
 }: {
   item: Doc<"vaultItems">;
+  /** Decrypted title. Only available while the vault is unlocked. */
+  title: string;
+  /** Decrypted kind, so metadata can be encrypted at rest. */
+  kind: VaultKind;
   body: string | null;
   locked: boolean;
   onReveal: () => void;
@@ -43,7 +49,7 @@ export function VaultCard({
   onTogglePin: () => void;
   busy?: boolean;
 }) {
-  const meta = KIND_META[item.kind];
+  const meta = KIND_META[kind];
   const Icon = meta.icon;
 
   return (
@@ -68,7 +74,7 @@ export function VaultCard({
             <Icon className={cn("size-4", meta.tone)} />
           </span>
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
+            <p className="truncate text-sm font-medium text-foreground">{title}</p>
             <p className="mt-1 text-mono-label">{meta.label}</p>
           </div>
         </div>
