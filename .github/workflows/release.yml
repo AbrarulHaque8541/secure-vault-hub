@@ -23,6 +23,14 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # A release must not ship a dependency graph with a known advisory. The
+      # frozen install uses bun.lock, so guard the RESOLVED version.
+      - name: Guard — lockfile dependency floors
+        run: node scripts/check-lockfile-deps.mjs
+
+      - name: Convex unit tests
+        run: bun test src/convex/lib
+
       # Capacitor 8 requires Java 21 (JDK 17 fails with an unsupported
       # class-file-version error during Gradle compilation).
       - uses: actions/setup-java@v4
