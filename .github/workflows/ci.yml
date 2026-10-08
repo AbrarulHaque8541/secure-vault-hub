@@ -58,6 +58,19 @@ jobs:
       - name: Unit tests
         run: bun test src/lib
 
+      # Guard 3: `bun install --frozen-lockfile` installs what bun.lock resolves,
+      # not what package.json declares. A stale lockfile therefore keeps a
+      # patched-looking package.json on the vulnerable version, so assert the
+      # RESOLVED axios floor (H5: prototype pollution + DNS/proxy bypass).
+      - name: Guard — lockfile dependency floors
+        run: node scripts/check-lockfile-deps.mjs
+
+      # Guard 4: the round-2 convex helpers (secret redaction, OTP rate limiting)
+      # ship their own bun:test suites under src/convex/lib, which the
+      # `bun test src/lib` step above does not discover.
+      - name: Convex unit tests
+        run: bun test src/convex/lib
+
   build-web:
     name: Production web build
     runs-on: ubuntu-latest
