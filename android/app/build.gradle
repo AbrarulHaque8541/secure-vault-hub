@@ -1,5 +1,18 @@
 apply plugin: 'com.android.application'
 
+// ---------------------------------------------------------------------------
+// Production release signing.
+//
+// Credentials come from the environment (RELEASE_STORE_FILE,
+// RELEASE_STORE_PASSWORD, RELEASE_KEY_ALIAS, RELEASE_KEY_PASSWORD), which CI feeds
+// from protected secrets. The build FAILS CLOSED for release/bundle/package tasks
+// when they are absent — it never falls back to the debug key, so the pipeline can
+// no longer publish an `app-release-unsigned.apk`.
+//
+// `rootProject.ext.hasReleaseSigning` is computed in variables.gradle so both the
+// signingConfig and the task-graph guard agree on the same condition.
+// ---------------------------------------------------------------------------
+
 android {
     namespace = "app.securevaulthub.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,10 +29,42 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (rootProject.ext.hasReleaseSigning) {
+            release {
+                storeFile file(rootProject.ext.releaseStoreFile)
+                storePassword rootProject.ext.releaseStorePassword
+                keyAlias rootProject.ext.releaseKeyAlias
+                keyPassword rootProject.ext.releaseKeyPassword
+                enableV1Signing true
+                enableV2Signing true
+                enableV3Signing true
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (rootProject.ext.hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
+            // When credentials are absent the release build has no signingConfig and the
+            // task-graph guard below fails the build before any artifact is produced.
+        }
+    }
+}
+
+if (!rootProject.ext.hasReleaseSigning) {
+    gradle.taskGraph.whenReady { graph ->
+        def productionTask = graph.allTasks.find { it.name in ['assembleRelease', 'bundleRelease', 'packageRelease'] }
+        if (productionTask != null) {
+            throw new GradleException(
+                "Production release signing is not configured. Set RELEASE_STORE_FILE, " +
+                "RELEASE_STORE_PASSWORD, RELEASE_KEY_ALIAS and RELEASE_KEY_PASSWORD before " +
+                "building a release variant (attempted task: ${productionTask.name}). Refusing " +
+                "to produce an unsigned production artifact."
+            )
         }
     }
 }
