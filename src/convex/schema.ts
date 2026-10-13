@@ -58,7 +58,9 @@ const schema = defineSchema(
       .index("by_user_pinned", ["userId", "pinnedAt"]),
   },
   {
-    schemaValidation: false,
+    // Runtime document validation against the schema. Keep on so malformed or
+    // out-of-spec documents are rejected by the database layer.
+    schemaValidation: true,
   },
 );
 

@@ -16,6 +16,23 @@ const kindValidator = v.union(
   v.literal("task"),
 );
 
+// Input-size guardrails — prevent arbitrary storage/metadata abuse.
+const MAX_CIPHERTEXT_LENGTH = 1_000_000; // 1 MB
+const MAX_HINTS = 10;
+const MAX_HINT_LENGTH = 200;
+
+function assertLimits(ciphertext: string, hints?: string[]) {
+  if (ciphertext.length > MAX_CIPHERTEXT_LENGTH) {
+    throw new Error(`ciphertext exceeds ${MAX_CIPHERTEXT_LENGTH} characters`);
+  }
+  if (hints !== undefined) {
+    if (hints.length > MAX_HINTS) throw new Error(`at most ${MAX_HINTS} hints allowed`);
+    for (const hint of hints) {
+      if (hint.length > MAX_HINT_LENGTH) throw new Error(`hint exceeds ${MAX_HINT_LENGTH} characters`);
+    }
+  }
+}
+
 export const list = query({
   args: {},
   handler: async (ctx) => {
@@ -53,6 +70,7 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (userId === null) throw new Error("Not authenticated");
+    assertLimits(args.ciphertext, args.hints);
     const now = Date.now();
     return await ctx.db.insert("vaultItems", {
       userId,
@@ -82,6 +100,9 @@ export const update = mutation({
     if (userId === null) throw new Error("Not authenticated");
     const item = await ctx.db.get(args.id);
     if (!item || item.userId !== userId) throw new Error("Vault item not found");
+    if (args.ciphertext !== undefined || args.hints !== undefined) {
+      assertLimits(args.ciphertext ?? item.ciphertext, args.hints ?? item.hints);
+    }
 
     const patch: Partial<typeof item> = { updatedAt: Date.now() };
     if (args.title !== undefined) patch.title = args.title.slice(0, 180);
