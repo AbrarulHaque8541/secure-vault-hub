@@ -8,6 +8,9 @@ import { ThemeProvider } from "./components/theme-provider";
 import React, { StrictMode, useEffect, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router";
+import { parseAllowedOrigins, readNavigationDirection, resolvePostTargetOrigin } from "./lib/embed";
+import { getAutoLockMs, useAutoLock } from "./lib/vault-store";
+import { toast } from "sonner";
 import "./index.css";
 
 // Lazy load route components for better code splitting
@@ -83,28 +86,70 @@ class RootErrorBoundary extends React.Component<
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
+/**
+ * Origins permitted to frame this app and drive its router.
+ *
+ * Empty by default, and an empty allowlist denies every inbound navigation
+ * rather than trusting all of them — a missing build variable must fail
+ * closed.
+ */
+const ALLOWED_EMBED_ORIGINS = parseAllowedOrigins(
+  import.meta.env.VITE_ALLOWED_EMBED_ORIGINS as string | undefined,
+);
+
 
 
 function RouteSyncer() {
   const location = useLocation();
   useEffect(() => {
+    // The payload is a pathname and nothing else, so the wildcard fallback in
+    // `resolvePostTargetOrigin` cannot disclose vault content. See src/lib/embed.ts.
     window.parent.postMessage(
       { type: "iframe-route-change", path: location.pathname },
-      "*",
+      resolvePostTargetOrigin(ALLOWED_EMBED_ORIGINS, document.referrer),
     );
   }, [location.pathname]);
 
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
-      if (event.data?.type === "navigate") {
-        if (event.data.direction === "back") window.history.back();
-        if (event.data.direction === "forward") window.history.forward();
-      }
+      // Origin and sender are both checked before the payload is read. The
+      // previous version trusted every message that merely carried
+      // `type: "navigate"`, so any frame that could reach this window could
+      // drive the router.
+      const direction = readNavigationDirection(
+        {
+          origin: event.origin,
+          isFromParent: event.source === window.parent,
+          data: event.data,
+        },
+        ALLOWED_EMBED_ORIGINS,
+      );
+
+      if (direction === "back") window.history.back();
+      else if (direction === "forward") window.history.forward();
     }
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
   }, []);
 
+  return null;
+}
+
+/**
+ * App-wide idle auto-lock.
+ *
+ * Mounted once, inside the router, so the vault is armed on EVERY route — not
+ * only `/dashboard`. Previously the hook lived inside `Dashboard`, so any other
+ * route left the in-memory key with no idle timer at all. The lock policy
+ * itself lives in `src/lib/vault-store.ts`; this component only surfaces the
+ * "why did it lock" toast.
+ */
+function VaultAutoLock() {
+  useAutoLock(() => {
+    toast("Vault locked", {
+      description: `No activity for ${Math.round(getAutoLockMs() / 60_000)} minutes — your key was cleared from memory.`,
+    });
+  });
   return null;
 }
 
@@ -119,6 +164,7 @@ createRoot(document.getElementById("root")!).render(
         <ConvexAuthProvider client={convex}>
         <BrowserRouter>
           <RouteSyncer />
+          <VaultAutoLock />
           <Suspense fallback={<RouteLoading />}>
             <Routes>
               <Route path="/" element={<Landing />} />
