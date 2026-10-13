@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Backup/restore rules for Android 11 and below (API <= 30).
+
+  `<full-backup-content>` has no "deny everything" switch — backup is either on
+  or off. `android:allowBackup="false"` in the manifest already disables the
+  automatic path, and this file makes the intent explicit for anyone reading
+  the resource folders.
+
+  Every domain is excluded rather than relying on the manifest flag alone, so a
+  future merge that flips `allowBackup` back on still cannot exfiltrate the
+  WebView profile, cookies, or cached plaintext.
+-->
+<full-backup-content>
+    <exclude domain="root" />
+    <exclude domain="file" />
+    <exclude domain="database" />
+    <exclude domain="sharedpref" />
+    <exclude domain="external" />
+</full-backup-content>
